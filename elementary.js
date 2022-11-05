@@ -1,3 +1,4 @@
+/* esline-env browser */
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
 const validHTMLTags = Object.freeze([
