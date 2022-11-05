@@ -1,0 +1,26 @@
+{
+  "name": "elementary.js",
+  "version": "0.1.0",
+  "description": "Simple reactive ui building without frameworks",
+  "main": "elementary.js",
+  "devDependencies": {
+    "mocha": "^10.1.0",
+    "standard": "^17.0.0"
+  },
+  "scripts": {
+    "lint": "standard --fix",
+    "test": "standard && mocha",
+    "prepublish": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fynyky/elementary.js.git"
+  },
+  "author": "Li Hongyi",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fynyky/elementary.js/issues"
+  },
+  "homepage": "https://github.com/fynyky/elementary.js#readme",
+  "type": "module"
+}
