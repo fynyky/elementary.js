@@ -4,12 +4,17 @@
   "description": "Simple reactive ui building without frameworks",
   "main": "elementary.js",
   "devDependencies": {
+    "chai": "^4.3.6",
+    "karma": "^6.4.1",
+    "karma-chai": "^0.1.0",
+    "karma-chrome-launcher": "^3.1.1",
+    "karma-mocha": "^2.0.1",
     "mocha": "^10.1.0",
     "standard": "^17.0.0"
   },
   "scripts": {
     "lint": "standard --fix",
-    "test": "standard && mocha",
+    "test": "karma start --single-run --browsers ChromeHeadless karma.conf.js",
     "prepublish": "npm test"
   },
   "repository": {
@@ -21,6 +26,5 @@
   "bugs": {
     "url": "https://github.com/fynyky/elementary.js/issues"
   },
-  "homepage": "https://github.com/fynyky/elementary.js#readme",
-  "type": "module"
+  "homepage": "https://github.com/fynyky/elementary.js#readme"
 }
