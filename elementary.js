@@ -123,15 +123,18 @@ export const el = (descriptor, ...children) => {
       elInterface.observers.push(child)
       child.context = self
       child()
-    }
     // Need this to come after cos observers are functions themselves
     // we use apply(self, self) to provide this for traditional functions
     // and to provide (ctx) => {...} for arrow functions
-    else if (typeof child === 'function') child.apply(self, self)
+    } else if (typeof child === 'function') {
+      child.apply(self, self)
     // Arrays are handled recursively
-    else if (child instanceof Array) child.forEach(grandChild => append(grandChild))
+    } else if (child instanceof Array) {
+      child.forEach(grandChild => append(grandChild))
     // TODO write better error message
-    else throw new TypeError('expects string, function, or an Element')
+    } else {
+      throw new TypeError('expects string, function, or an Element')
+    }
   }
   children.forEach(append)
 
