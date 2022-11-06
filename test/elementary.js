@@ -1,7 +1,10 @@
 /* esline-env browser */
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
-class Observer {} // TODO fill this out
+import {
+  isObserver
+} from './reactor.js'
+
 const validHTMLTags = Object.freeze([
   'a', 'abbr', 'acronym', 'address', 'applet', 'area', 'article', 'aside', 'audio',
   'b', 'bdi', 'base', 'basefont', 'bdo', 'big', 'blockquote', 'body', 'br', 'button',
@@ -54,9 +57,13 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
       const elementElInterface = elCache.get(element)
       if (elementElInterface) {
         if (document.contains(element)) {
-          elementElInterface.observers.forEach(obs => obs.start())
+          for (const obs of elementElInterface.observers.keys()) {
+            obs.start()
+          }
         } else {
-          elementElInterface.observers.forEach(obs => obs.stop())
+          for (const obs of elementElInterface.observers.keys()) {
+            obs.stop()
+          }
         }
       }
     })
@@ -66,8 +73,11 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
 mutationObserver.observe(document, { subtree: true, childList: true })
 
 // Cleans up observers which belong to lost elements
+// Register the observers to be cleaned up when an element is created
+// TODO do I need to do this?
+// As long as they get stopped when removed form DOM isnt that enough?
 const obsCleanup = new FinalizationRegistry((orphanObservers) => {
-  for (const orphanObserver of orphanObservers) orphanObserver(null)
+  for (const orphanObserver of orphanObservers.keys()) orphanObserver.clear()
 })
 
 // Helper function to do things to all elements in a subtree
@@ -97,7 +107,6 @@ export const el = (descriptor, ...children) => {
   // If its an existing element dont do anything
   let self
   // Trivial case when given an element
-  // TODO: Should this be a Node instead of Element?
   if (descriptor instanceof Element) {
     self = descriptor
   // If its a selector then find the thing
@@ -123,7 +132,9 @@ export const el = (descriptor, ...children) => {
   let elInterface = elCache.get(self)
   if (typeof elInterface === 'undefined') {
     elInterface = {
-      observers: []
+      // Map of observers to a Set of elements they create
+      // Should this be weakrefmap?
+      observers: new Map() 
     }
     obsCleanup.register(self, elInterface.observers)
     elCache.set(self, elInterface)
@@ -135,38 +146,49 @@ export const el = (descriptor, ...children) => {
   // If its a function, execute it in the context. Append return values
   // If its an observer ???
   // TODO should handle documentFragments?
-  function append (child) {
-    if (typeof child === 'string') self.appendChild(document.createTextNode(child))
-    else if (child instanceof Element) self.appendChild(child)
-    else if (child instanceof Observer) {
-      // TODO need to rebuild observers to not starting automatically
-      // and be able to be given an owner
-      // Also have the owner work with both manually passed in as argument
-      // As well as implicitly in the this call
-      elInterface.observers.push(child)
+  function append (child, observerParent) {
+    // TODO consider span wrapping -> This will allow observers to clear themselves better?
+    if (typeof child === 'string') {
+      const textNode = document.createTextNode(child)
+      if (observerParent) elInterface.observers.get(observerParent).add(textNode)
+      self.appendChild(textNode)
+    }
+    else if (child instanceof Element) {
+      if (observerParent) elInterface.observers.get(observerParent).add(child)
+      self.appendChild(child)
+    } else if (isObserver(child)) {
+      elInterface.observers.set(child, new Set())
       child.context = self
-      child()
+      child.subscribe((result) => {
+        let oldChildren = elInterface.observers.get(child)
+        for (const oldChild of oldChildren) oldChild.remove()
+        // TODO insert new children in the place of the old children
+        // How to track this
+        if (typeof result !== 'undefined') append(result, child)
+      })
+      // If element is already in the document trigger it to start the observer
+      // If it is not yet in the document then don't trigger it yet
+      // It will get started by the global MutationObserver
+      if (document.contains(self)) child()
     // Need this to come after cos observers are functions themselves
     // we use call(self, self) to provide this for traditional functions
     // and to provide (ctx) => {...} for arrow functions
     } else if (typeof child === 'function') {
       const result = child.call(self, self)
       // TODO wrap this in a try block (fail cleanly if nothing to append?)
-      if (typeof result !== 'undefined') append(result)
+      if (typeof result !== 'undefined') append(result, observerParent)
     // Arrays are handled recursively
     } else if (child instanceof Array) {
-      child.forEach(grandChild => append(grandChild))
-    // TODO write better error message
+      child.forEach(grandChild => append(grandChild, observerParent))
     } else {
-      throw new TypeError('expects string, function, or an Element')
+      throw new TypeError('expects string, function, an Element, or an Array of them')
     }
   }
-  children.forEach(append)
+  children.forEach((child) => append(child))
 
-  // TODO: if i'm elling everything from document all the way down, then wont this over trigger?
-  // Maybe have the mutation observer defined outside of el? That way it should replace itself?
-  // Does it trigger anyway for each subtree?
-  // Tested. It does multi trigger even with the same mutation observer observing multiple
-
+  // Return the raw DOM element
+  // Magic wrapping held in a pocket dimension outside of time and space
   return self
 }
+
+export * from './reactor.js'

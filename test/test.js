@@ -1,11 +1,14 @@
 /* esline-env browser */
 /* globals  el */
 
+import { el } from "./elementary.js"
+import { observe as ob, Reactor } from "./reactor.js"
+
 describe("Element creation", () => {
     
   it('can create a basic div', () => {
     const result = el("foo")
-    assert(result.outerHTML === '<div class="foo"></div>')
+    assert.equal(result.outerHTML,'<div class="foo"></div>')
   })
 
   it('can create a valid HTML tag', () => {
@@ -21,8 +24,8 @@ describe("Element creation", () => {
   })
 
   it('can fill an element with text', () => {
-    const result = el("foo", "bar")
-    assert(result.outerHTML === '<div class="foo">bar</div>')
+    const result = el("foo", 'bar')
+    assert.equal(result.outerHTML, '<div class="foo">bar</div>')
   })
 
   it('can fill an element with another element', () => {
@@ -108,7 +111,82 @@ describe("Element creation", () => {
 })
 
 describe("Reactivity", () => {
+  it('can take an observer', () => {
+    const result = el("foo", ob(() => {}))
+  })
 
+  it('can take an observer modifying a property', (done) => {
+    const result = el("foo", ob(($) => {
+      $.setAttribute("name", 'bar')
+    }))
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo" name="bar"></div>')
+      result.remove()
+      done()
+    }, 0)
+  })
+
+  it('can take an observer returning a string', (done) => {
+    const result = el("foo", ob(() => 'bar'))
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo">bar</div>')
+      result.remove()
+      done()
+    }, 0)
+  })
+
+  it('can take an observer returning an element', (done) => {
+    const result = el("foo", ob(() => el('bar', 'baz')))
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo"><div class="bar">baz</div></div>')
+      result.remove()
+      done()
+    }, 0)
+  })
+
+  it('can take an observer returning an array', (done) => {
+    const result = el("foo", ob(() => ['bar', 'baz', 'qux']))
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo">barbazqux</div>')
+      result.remove()
+      done()
+    }, 0)
+  })
+
+  it('can take a nested set of observers', (done) => {
+    const result = el("foo", ob(() => {
+      return [
+        ob(() => {
+          return [
+            ob(() => {
+              return 'bar'
+            }),
+            ob(() => {
+              return 'baz'
+            })
+          ]
+        }),
+        ob(() => {
+          return ob(() => {
+            return 'qux'
+          })
+        }),
+      ]
+    }))
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo">barbazqux</div>')
+      result.remove()
+      done()
+    }, 0)
+  })
+  it('updates an observer property', () => { throw 'test not defined'})
+  it('updates an observer string', () => { throw 'test not defined'})
+  it('updates an observer element', () => { throw 'test not defined'})
 })
 
 describe("Clean up", () => {
