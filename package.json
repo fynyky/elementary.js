@@ -26,5 +26,6 @@
   "bugs": {
     "url": "https://github.com/fynyky/elementary.js/issues"
   },
-  "homepage": "https://github.com/fynyky/elementary.js#readme"
+  "homepage": "https://github.com/fynyky/elementary.js#readme",
+  "type": "module"
 }
