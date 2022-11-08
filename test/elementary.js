@@ -35,8 +35,6 @@ const elCache = new WeakMap()
 // Setup a mutation observer
 // If an element is removed from the document then turn it off
 // Have to account for nodes being added to removed outside of the document
-const observerMap = new WeakMap()
-
 const mutationObserver = new MutationObserver((mutationList, mutationObserver) => {
   // Compile a flat set of added/removed elements
   const addedAndRemovedElements = new Set()
@@ -72,6 +70,25 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
 
 })
 mutationObserver.observe(document, { subtree: true, childList: true })
+
+// Tracks when observer comment placeholders are removed
+// When they are remove their partner as well and deactivate their observer
+// Maps the observer start end and observer itself to each other
+const observerTrios = new WeakMap()
+// const commentObserver = new MutationObserver((mutationList, mutationObserver) => {
+//   // Compile a flat set of added/removed elements
+//   const addedAndRemovedElements = new Set()
+//   for (const mutationRecord of mutationList) {
+//     for (const removedNode of Array.from(mutationRecord.removedNodes)) {
+//       if (removedNode.nodeType === Node.ELEMENT_NODE) {
+//         addedAndRemovedElements.add(removedNode)
+//       }
+//     }
+//   }
+// })
+
+// commentObserver.observe(document, { childList: true })
+
 
 // Helper function to do things to all elements in a subtree
 function subtreeDo (target, callback) {
@@ -196,11 +213,11 @@ export const el = (descriptor, ...children) => {
             // Any missing nodes 
             for (const oldChild of oldChildren) {
               oldChild.remove()
-              const oldObserver = observerMap.get(oldChild)
-              if (oldObserver) {
-                oldObserver.clear()
-                elInterface.observers.delete(oldObserver)  
-                observerMap.delete(oldChild)
+              // If we remove an inner observer marker clear it up
+              const oldObserverTrio = observerTrios.get(oldChild)
+              if (oldObserverTrio) {
+                oldObserverTrio.observer.clear()
+                elInterface.observers.delete(oldObserverTrio.observer)
               }
             }
             append(result, observerEndNode)
@@ -223,7 +240,14 @@ export const el = (descriptor, ...children) => {
       else self.appendChild(observerEndNode)
       // Keep a mapping of the end comment to the observer
       // Lets the observer be cleaned up when the owning comment is removed
-      observerMap.set(observerEndNode, child)
+      const observerTrio = {
+        start: observerStartNode,
+        end: observerEndNode,
+        observer: child
+      }
+      observerTrios.set(observerStartNode, observerTrio)
+      observerTrios.set(observerEndNode, observerTrio)
+      observerTrios.set(child, observerTrio)
 
     // Need this to come after cos observers are functions themselves
     // we use call(self, self) to provide this for traditional functions
