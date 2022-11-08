@@ -73,14 +73,6 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
 })
 mutationObserver.observe(document, { subtree: true, childList: true })
 
-// Cleans up observers which belong to lost elements
-// Register the observers to be cleaned up when an element is created
-// TODO do I need to do this?
-// As long as they get stopped when removed form DOM isnt that enough?
-const obsCleanup = new FinalizationRegistry((orphanObservers) => {
-  for (const orphanObserver of orphanObservers.keys()) orphanObserver.clear()
-})
-
 // Helper function to do things to all elements in a subtree
 function subtreeDo (target, callback) {
   if (!(target instanceof Element)) throw new TypeError(
@@ -156,7 +148,6 @@ export const el = (descriptor, ...children) => {
       // Should this be weakrefmap?
       observers: new Set() 
     }
-    obsCleanup.register(self, elInterface.observers)
     elCache.set(self, elInterface)
   }
 
