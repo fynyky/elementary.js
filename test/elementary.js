@@ -29,11 +29,14 @@ const validHTMLTags = Object.freeze([
 ])
 
 // Maps normal Elements to their elInterface which enables the magic
+// Used to stop the observers when disconnected from the document
 const elCache = new WeakMap()
 
 // Setup a mutation observer
 // If an element is removed from the document then turn it off
 // Have to account for nodes being added to removed outside of the document
+const observerMap = new WeakMap()
+
 const mutationObserver = new MutationObserver((mutationList, mutationObserver) => {
   // Compile a flat set of added/removed elements
   const addedAndRemovedElements = new Set()
@@ -55,11 +58,11 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
       const elementElInterface = elCache.get(element)
       if (elementElInterface) {
         if (document.contains(element)) {
-          for (const obs of elementElInterface.observers.keys()) {
+          for (const obs of elementElInterface.observers) {
             obs.start()
           }
         } else {
-          for (const obs of elementElInterface.observers.keys()) {
+          for (const obs of elementElInterface.observers) {
             obs.stop()
           }
         }
@@ -151,7 +154,7 @@ export const el = (descriptor, ...children) => {
     elInterface = {
       // Map of observers to a Set of elements they create
       // Should this be weakrefmap?
-      observers: new Map() 
+      observers: new Set() 
     }
     obsCleanup.register(self, elInterface.observers)
     elCache.set(self, elInterface)
@@ -179,7 +182,7 @@ export const el = (descriptor, ...children) => {
     // between bookends
     } else if (isObserver(child)) {
       let observerStartNode, observerEndNode
-      elInterface.observers.set(child, new Set())
+      elInterface.observers.add(child)
       child.context = self
       // Start with the opening bookend
       observerStartNode = document.createComment('observerStart')
@@ -198,11 +201,22 @@ export const el = (descriptor, ...children) => {
           // Then insert between them
           } else if (observerEndNode.parentNode === self) {
             const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
-            for (const oldChild of oldChildren) oldChild.remove()
+            // Clean up the old nodes
+            // Any missing nodes 
+            for (const oldChild of oldChildren) {
+              oldChild.remove()
+              const oldObserver = observerMap.get(oldChild)
+              if (oldObserver) {
+                oldObserver.clear()
+                elInterface.observers.delete(oldObserver)  
+                observerMap.delete(oldChild)
+              }
+            }
             append(result, observerEndNode)
           // Anchors no longer attached can discard the observer
           } else {
-            child.stop()
+            child.clear()
+            elInterface.observers.delete(child)
           }
         }
       })
@@ -216,6 +230,9 @@ export const el = (descriptor, ...children) => {
       observerEndNode = document.createComment('observerEnd')
       if (insertionPoint) self.insertBefore(observerEndNode, insertionPoint)
       else self.appendChild(observerEndNode)
+      // Keep a mapping of the end comment to the observer
+      // Lets the observer be cleaned up when the owning comment is removed
+      observerMap.set(observerEndNode, child)
 
     // Need this to come after cos observers are functions themselves
     // we use call(self, self) to provide this for traditional functions
