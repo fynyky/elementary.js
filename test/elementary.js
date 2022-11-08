@@ -35,7 +35,7 @@ const elCache = new WeakMap()
 // Setup a mutation observer
 // If an element is removed from the document then turn it off
 // Have to account for nodes being added to removed outside of the document
-const mutationObserver = new MutationObserver((mutationList, mutationObserver) => {
+const documentObserver = new MutationObserver((mutationList, mutationObserver) => {
   // Compile a flat set of added/removed elements
   const addedAndRemovedElements = new Set()
   for (const mutationRecord of mutationList) {
@@ -69,25 +69,24 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
   }
 
 })
-mutationObserver.observe(document, { subtree: true, childList: true })
+documentObserver.observe(document, { subtree: true, childList: true })
 
 // Tracks when observer comment placeholders are removed
 // When they are remove their partner as well and deactivate their observer
 // Maps the observer start end and observer itself to each other
 const observerTrios = new WeakMap()
-// const commentObserver = new MutationObserver((mutationList, mutationObserver) => {
-//   // Compile a flat set of added/removed elements
-//   const addedAndRemovedElements = new Set()
-//   for (const mutationRecord of mutationList) {
-//     for (const removedNode of Array.from(mutationRecord.removedNodes)) {
-//       if (removedNode.nodeType === Node.ELEMENT_NODE) {
-//         addedAndRemovedElements.add(removedNode)
-//       }
-//     }
-//   }
-// })
-
-// commentObserver.observe(document, { childList: true })
+const commentObserver = new MutationObserver((mutationList, mutationObserver) => {
+  for (const mutationRecord of mutationList) {
+    for (const removedNode of Array.from(mutationRecord.removedNodes)) {
+      const observerTrio = observerTrios.get(removedNode)
+      if (observerTrio) {
+        observerTrio.start.remove()
+        observerTrio.end.remove()
+        observerTrio.observer.stop() // Should this be clear? possibility for reattachment?
+      }
+    }
+  }
+})
 
 
 // Helper function to do things to all elements in a subtree
@@ -167,6 +166,7 @@ export const el = (descriptor, ...children) => {
     }
     elCache.set(self, elInterface)
   }
+  commentObserver.observe(self, { subtree: false, childList: true })
 
   // For the children
   // If its a string, then just append it as a text node child

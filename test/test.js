@@ -415,5 +415,41 @@ describe("Clean up", () => {
     }, 10)
   })
 
+
+  it('removes comment pair together', (done) => {
+    const rx = new Reactor()
+    rx.bar = 'baz'  
+    const result = el("foo", ob(() => rx.bar))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+    result.childNodes[0].remove()
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo">baz</div>')
+      done()
+    }, 10)
+  })
+
+
+
+  it('disables observer when comment placeholder is removed', (done) => {
+    const rx = new Reactor()
+    rx.bar = 'baz'  
+    const result = el("foo", ob(() => rx.bar))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+    document.body.appendChild(result)
+    setTimeout(() => {
+      rx.bar = 'qux'
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->qux<!--observerEnd--></div>')
+      result.childNodes[0].remove()
+      setTimeout(() => {
+        assert.equal(result.outerHTML, '<div class="foo">qux</div>')
+        rx.bar = 'corge'
+        assert.equal(result.outerHTML, '<div class="foo">qux</div>')
+        result.remove()
+        done()
+      }, 10)
+    }, 10)
+
+  })
+
   
 })
