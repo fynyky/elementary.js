@@ -123,7 +123,6 @@ describe("Reactivity", () => {
   })
 
   it('can take an observer modifying a property', (done) => {
-    console.log('can take')
     const result = el("foo", ob(($) =>  {
       $.setAttribute('name', 'bar')
     }))
@@ -216,10 +215,124 @@ describe("Reactivity", () => {
     }, 10)
   })
 
-  // it('updates an observer property', () => { throw 'test not defined'})
-  // it('updates an observer string', () => { throw 'test not defined'})
-  // it('updates an observer element', () => { throw 'test not defined'})
-})
+  it('updates an observer property', (done) => {
+    const rx = new Reactor()
+    rx.bar = 'baz'
+    const result = el("foo", ob(($) =>  {
+      $.setAttribute('name', rx.bar)
+    }))
+    assert.equal(
+      result.outerHTML, 
+      '<div class="foo" name="baz"><!--observerStart--><!--observerEnd--></div>'
+    )
+    rx.bar = 'qux'
+    assert.equal(
+      result.outerHTML, 
+      '<div class="foo" name="baz"><!--observerStart--><!--observerEnd--></div>'
+    )
+    document.body.appendChild(result)
+      setTimeout(() => {
+        assert.equal(
+          result.outerHTML, 
+          '<div class="foo" name="qux"><!--observerStart--><!--observerEnd--></div>'
+        )
+        rx.bar = 'corge'
+        assert.equal(
+          result.outerHTML, 
+          '<div class="foo" name="corge"><!--observerStart--><!--observerEnd--></div>'
+        )
+        result.remove()
+        done()
+      }, 10)
+    })
+
+    it('updates an observer string', (done) => { 
+      const rx = new Reactor()
+      rx.bar = 'baz'  
+      const result = el("foo", ob(() => rx.bar))
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+      rx.bar = 'qux'
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+      document.body.appendChild(result)
+      setTimeout(() => {
+        assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->qux<!--observerEnd--></div>')
+        rx.bar = 'corge'
+        assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->corge<!--observerEnd--></div>')
+        result.remove()
+        done()
+      }, 10)
+    })
+
+    it('updates an observer element', (done) => { 
+      const rx = new Reactor()
+      rx.foo = 'foo'
+      rx.bar = 'bar'
+      const result = el("div", ob(() => el(rx.foo, rx.bar)))
+      assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="foo">bar</div><!--observerEnd--></div>')
+      rx.foo = 'baz'
+      rx.bar = 'qux'
+      assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="foo">bar</div><!--observerEnd--></div>')
+      document.body.appendChild(result)
+      setTimeout(() => {
+        assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="baz">qux</div><!--observerEnd--></div>')
+        rx.foo = 'corge'
+        assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="corge">qux</div><!--observerEnd--></div>')
+        rx.bar = 'grault'
+        assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="corge">grault</div><!--observerEnd--></div>')
+        result.remove()
+        done()
+      }, 10)  
+    })
+
+    it('updates a complex element', (done) => { 
+      const rx = new Reactor()
+      rx.title = 'foo'
+      rx.paragraphs = [
+        { id: 'bar', content: 'Lorem ipsum dolor sit amet', time: '1'},
+        { id: 'baz', content: 'Ut enim ad minim veniam', time: '2'},
+        { id: 'qux', content: 'Duis aute irure dolor in reprehenderit', time: '3'}
+      ]
+      const result = el("article",
+        el('h1', ob(() => rx.title )),
+        ob(() => rx.paragraphs.map((paragraph) => [
+          el('p', ob(($) => {
+            $.setAttribute('id', paragraph.id)
+            return paragraph.content
+          })),
+          ob(() => el('h3', ob(() => paragraph.time)))
+        ]))
+      )
+      assert.equal(
+        result.outerHTML,
+        '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+      )
+      document.body.appendChild(result)
+      rx.title = 'corge'
+      assert.equal(
+        result.outerHTML,
+        '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+      )
+      setTimeout(() => {
+        assert.equal(
+          result.outerHTML,
+          '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+        )
+        rx.paragraphs[0].content = 'bloop bloop bloop'
+        assert.equal(
+          result.outerHTML,
+          '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+        )
+        rx.paragraphs[2].time = '987'
+        assert.equal(
+          result.outerHTML,
+          '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->987<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+        )
+        result.remove()
+        done()
+      }, 10)  
+    })
+
+  })
 
 describe("Clean up", () => {
   
