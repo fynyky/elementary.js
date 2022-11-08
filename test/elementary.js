@@ -216,7 +216,7 @@ export const el = (descriptor, ...children) => {
               // If we remove an inner observer marker clear it up
               const oldObserverTrio = observerTrios.get(oldChild)
               if (oldObserverTrio) {
-                oldObserverTrio.observer.clear()
+                oldObserverTrio.observer.stop()
                 elInterface.observers.delete(oldObserverTrio.observer)
               }
             }
