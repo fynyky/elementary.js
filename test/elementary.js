@@ -1,7 +1,7 @@
 /* esline-env browser */
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
-import { isObserver } from './reactor.js'
+import { isObserver, observe } from './reactor.js'
 
 const validHTMLTags = Object.freeze([
   'a', 'abbr', 'acronym', 'address', 'applet', 'area', 'article', 'aside', 'audio',
@@ -253,6 +253,24 @@ export const el = (descriptor, ...children) => {
   // Return the raw DOM element
   // Magic wrapping held in a pocket dimension outside of time and space
   return self
+}
+
+
+// shorthand for attribute setting
+// el('foo', attribute('id', 'bar'))
+export function attr (attribute, value) {
+  return ($) => {
+    $.setAttribute(attribute, value)
+  }
+}
+
+// shorthand for binding 
+// el('input', attribute('type', 'text'), bind(rx, 'foo'))
+export function bind (reactor, key) {
+  return ($) => {
+    $.oninput = () => reactor[key] = $.value
+    return observe(() => $.value = reactor[key] )
+  }
 }
 
 export * from './reactor.js'

@@ -1,7 +1,7 @@
 /* esline-env browser */
 /* globals  el */
 
-import { el } from "./elementary.js"
+import { el, attr, bind } from "./elementary.js"
 import { observe as ob, Reactor } from "./reactor.js"
 
 describe("Element creation", () => {
@@ -331,6 +331,56 @@ describe("Reactivity", () => {
       done()
     }, 10)  
   })
+
+})
+
+describe('Shorthands', () => {
+  it('set attributes using attr', () => {
+    const result = el('foo', attr('id', 'bar'))
+    assert.equal(result.outerHTML,'<div class="foo" id="bar"></div>')
+  })
+
+  it('set multiple attributes using attr', () => {
+    const result = el('foo', 
+      attr('id', 'bar'), 
+      attr('name', 'baz')
+    )
+    assert.equal(result.outerHTML,'<div class="foo" id="bar" name="baz"></div>')
+  })
+
+  it('set attributes reactively using attr', (done) => {
+    const rx = new Reactor()
+    rx.foo = 'bar'
+    const result = el('foo', ob(() => attr('id', rx.foo)))
+    assert.equal(result.outerHTML,'<div class="foo" id="bar"><!--observerStart--><!--observerEnd--></div>')
+    rx.foo = 'baz'
+    assert.equal(result.outerHTML,'<div class="foo" id="bar"><!--observerStart--><!--observerEnd--></div>')
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML,'<div class="foo" id="baz"><!--observerStart--><!--observerEnd--></div>')
+      rx.foo = 'corge'
+      assert.equal(result.outerHTML,'<div class="foo" id="corge"><!--observerStart--><!--observerEnd--></div>')
+      result.remove()
+      done()
+    }, 10)
+  })
+
+  it.skip('does 2 way binding', () => {
+    // Need to automate this with puppeteer
+    const rx = new Reactor()
+    rx.foo = 'bar'
+    const display = el('h1', ob(() => rx.foo))
+    const input = el("input", 
+      attr('type', 'text'),
+      bind(rx, 'foo')
+    )
+    const input2 = el("input", 
+      attr('type', 'text'),
+      bind(rx, 'foo')
+    )
+    el(document.body, display, input, input2)
+  })
+
 
 })
 
