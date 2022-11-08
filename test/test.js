@@ -111,53 +111,83 @@ describe("Element creation", () => {
 })
 
 describe("Reactivity", () => {
-  it('can take an observer', () => {
+  it('can take an observer', (done) => {
     const result = el("foo", ob(() => {}))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerEnd--></div>')
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerEnd--></div>')
+      result.remove()
+      done()
+    }, 10)
   })
 
   it('can take an observer modifying a property', (done) => {
-    const result = el("foo", ob(($) => {
-      $.setAttribute("name", 'bar')
+    console.log('can take')
+    const result = el("foo", ob(($) =>  {
+      $.setAttribute('name', 'bar')
     }))
+    assert.equal(
+      result.outerHTML, 
+      '<div class="foo" name="bar"><!--observerStart--><!--observerEnd--></div>'
+    )
     document.body.appendChild(result)
     setTimeout(() => {
-      assert.equal(result.outerHTML, '<div class="foo" name="bar"></div>')
+      assert.equal(result.outerHTML, '<div class="foo" name="bar"><!--observerStart--><!--observerEnd--></div>')
       result.remove()
       done()
-    }, 0)
+    }, 10)
   })
 
   it('can take an observer returning a string', (done) => {
     const result = el("foo", ob(() => 'bar'))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->bar<!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
-      assert.equal(result.outerHTML, '<div class="foo">bar</div>')
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->bar<!--observerEnd--></div>')
       result.remove()
       done()
-    }, 0)
+    }, 10)
   })
 
   it('can take an observer returning an element', (done) => {
     const result = el("foo", ob(() => el('bar', 'baz')))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><div class="bar">baz</div><!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
-      assert.equal(result.outerHTML, '<div class="foo"><div class="bar">baz</div></div>')
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><div class="bar">baz</div><!--observerEnd--></div>')
       result.remove()
       done()
-    }, 0)
+    }, 10)
   })
 
   it('can take an observer returning an array', (done) => {
     const result = el("foo", ob(() => ['bar', 'baz', 'qux']))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->barbazqux<!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
-      assert.equal(result.outerHTML, '<div class="foo">barbazqux</div>')
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->barbazqux<!--observerEnd--></div>')
       result.remove()
       done()
-    }, 0)
+    }, 10)
   })
 
-  it('can take a nested set of observers', (done) => {
+  it('can take ested observers', (done) => {
+    const result = el("foo", ob(() => {
+      return ob(() => {
+        return 'bar'
+      })
+    }))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerStart-->bar<!--observerEnd--><!--observerEnd--></div>')
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerStart-->bar<!--observerEnd--><!--observerEnd--></div>')
+      result.remove()
+      done()
+    }, 10)
+  })
+
+  it('can take a complex nested set of observers', (done) => {
     const result = el("foo", ob(() => {
       return [
         ob(() => {
@@ -177,16 +207,18 @@ describe("Reactivity", () => {
         }),
       ]
     }))
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerStart--><!--observerStart-->bar<!--observerEnd--><!--observerStart-->baz<!--observerEnd--><!--observerEnd--><!--observerStart--><!--observerStart-->qux<!--observerEnd--><!--observerEnd--><!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
-      assert.equal(result.outerHTML, '<div class="foo">barbazqux</div>')
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerStart--><!--observerStart-->bar<!--observerEnd--><!--observerStart-->baz<!--observerEnd--><!--observerEnd--><!--observerStart--><!--observerStart-->qux<!--observerEnd--><!--observerEnd--><!--observerEnd--></div>')
       result.remove()
       done()
-    }, 0)
+    }, 10)
   })
-  it('updates an observer property', () => { throw 'test not defined'})
-  it('updates an observer string', () => { throw 'test not defined'})
-  it('updates an observer element', () => { throw 'test not defined'})
+
+  // it('updates an observer property', () => { throw 'test not defined'})
+  // it('updates an observer string', () => { throw 'test not defined'})
+  // it('updates an observer element', () => { throw 'test not defined'})
 })
 
 describe("Clean up", () => {
