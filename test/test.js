@@ -34,6 +34,14 @@ describe("Element creation", () => {
     assert(result.outerHTML === '<div class="bar"><div class="foo"></div></div>')
   })
 
+  it('can fill an element with a DocumentFragment', () => {
+    const fragment = document.createDocumentFragment()
+    fragment.appendChild(el('foo'))
+    fragment.appendChild(el('bar'))
+    const result = el('div', fragment)
+    assert(result.outerHTML === '<div class="div"><div class="foo"></div><div class="bar"></div></div>')
+  })
+
   it('can fill an element with a function', () => {
     const result = el("foo", $ => {
       $.innerHTML = "bar"

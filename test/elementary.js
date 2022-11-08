@@ -172,7 +172,7 @@ export const el = (descriptor, ...children) => {
       const textNode = document.createTextNode(child)
       if (insertionPoint) self.insertBefore(textNode, insertionPoint)
       else self.appendChild(textNode)
-    } else if (child instanceof Element) {
+    } else if (child instanceof Element || child instanceof DocumentFragment) {
       if (insertionPoint) self.insertBefore(child, insertionPoint)
       else self.appendChild(child)
     // Observers work similarly to functions
