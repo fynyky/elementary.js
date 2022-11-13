@@ -4,6 +4,33 @@
 import { el, attr, bind } from "./elementary.js"
 import { observe as ob, Reactor } from "./reactor.js"
 
+// it('testing Proxy on DOM objects', () => {
+//   const proxyHandler = {
+//     get(obj, prop) {
+//       return obj[prop]
+//     },
+//     set(obj, prop, value) {
+//       return obj[prop] = value
+//     }
+//   }
+//   const parent = document.createElement('div')
+//   const div = document.createElement('div')
+//   const p = document.createElement('p')
+//   const divProxy = new Proxy(div, proxyHandler)
+//   const pProxy = new Proxy(p, proxyHandler)
+//   div.innerHTML = 'foo'
+// })
+
+
+// it('testing Signal Proxy on DOM objects', () => {
+//   const signal = new Signal()
+//   const parent = document.createElement('div')
+//   const div = document.createElement('div')
+//   signal(div)
+//   signal().innerHTML
+//   parent.appendChild(div)
+// })
+
 describe("Element creation", () => {
     
   it('can create a basic div', () => {
@@ -258,17 +285,17 @@ describe("Reactivity", () => {
     const rx = new Reactor()
     rx.bar = 'baz'  
     const result = el("foo", ob(() => rx.bar))
-    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
-    rx.bar = 'qux'
-    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
-    document.body.appendChild(result)
-    setTimeout(() => {
-      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->qux<!--observerEnd--></div>')
-      rx.bar = 'corge'
-      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->corge<!--observerEnd--></div>')
-      result.remove()
-      done()
-    }, 10)
+    // assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+    // rx.bar = 'qux'
+    // assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+    // document.body.appendChild(result)
+    // setTimeout(() => {
+    //   assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->qux<!--observerEnd--></div>')
+    //   rx.bar = 'corge'
+    //   assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->corge<!--observerEnd--></div>')
+    //   result.remove()
+    //   done()
+    // }, 10)
   })
 
   it('updates an observer element', (done) => { 

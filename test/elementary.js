@@ -1,7 +1,7 @@
 /* esline-env browser */
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
-import { isObserver, observe } from './reactor.js'
+import { isObserver, observe, shuck } from './reactor.js'
 
 const validHTMLTags = Object.freeze([
   'a', 'abbr', 'acronym', 'address', 'applet', 'area', 'article', 'aside', 'audio',
@@ -182,7 +182,15 @@ export const el = (descriptor, ...children) => {
       else self.appendChild(textNode)
     } else if (child instanceof Element || child instanceof DocumentFragment) {
       if (insertionPoint) self.insertBefore(child, insertionPoint)
-      else self.appendChild(child)
+      else {
+        try {
+          self.appendChild(child)
+        } catch (error) {
+          console.log("self", self)
+          console.log("child", child)
+          throw error
+        }
+      }
     // Observers work similarly to functions
     // but with comment "bookends" on to demark their position
     // On initial commitment. Observers work like normal functions
@@ -191,13 +199,13 @@ export const el = (descriptor, ...children) => {
     } else if (isObserver(child)) {
       let observerStartNode, observerEndNode
       elInterface.observers.add(child)
-      child.context = self
       // Start with the opening bookend
       observerStartNode = document.createComment('observerStart')
       if (insertionPoint) self.insertBefore(observerStartNode, insertionPoint)
       else self.appendChild(observerStartNode)
-      // Setup the observer itself
-      child.subscribe((result) => {
+      // Observe the observer to append the results
+      observe(() => {
+        const result = shuck(child.value)
         if (typeof result !== 'undefined') {
           // If there is no end node yet then just continue to append like normal
           // This is to allow for the use of $.appendChild in the observer like 
@@ -227,13 +235,11 @@ export const el = (descriptor, ...children) => {
             elInterface.observers.delete(child)
           }
         }
-      })
-      // If element is already in the document trigger it to start the observer
-      // If it is not yet in the document then do an initial populating fire
-      // It will get started by the global MutationObserver
-      // TODO: double triggering? Once when created and again when attached to DOM?
-      if (document.contains(self)) child()
-      else child.trigger()
+      })()
+      // Kickoff the observer with a context of self
+      child(self)
+      // If it is not yet in the document then stop observer from triggering further
+      if (!document.contains(self)) child.stop()
       // Close with a bookend to mark the range of children owned
       observerEndNode = document.createComment('observerEnd')
       if (insertionPoint) self.insertBefore(observerEndNode, insertionPoint)

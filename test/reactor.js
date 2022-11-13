@@ -24,6 +24,11 @@ const coreExtractor = new WeakMap()
 // Then clears the batcher again
 let batcher = null
 
+// Cache of objects to their reactor proxies
+// Allows for consistent dependency tracking
+// across multiple reads of the same object
+const reactorCache = new WeakMap()
+
 // Definition is a shell class to identify dynamically calculated variables
 // Accessed through the "define" function
 // Class itself is not meant to be instantiated directly
@@ -75,11 +80,8 @@ class Signal {
     const signalCore = {
 
       // Signal state
-      value: null, // The set value
+      // value: undefined, // The set value. Purposed undefined as undefined
       dependents: new Set(), // The Observers which rely on this Signal
-      reactorCache: new WeakMap(), // Cache of objects to their reactor proxies
-      // Allows for consistent dependency tracking
-      // across multiple reads of the same object
       removeSelf: () => {}, // callback set by parent Reactor to allow removal
       // Used to delete Signals with no dependents
       // To reduce memory leaks
@@ -102,24 +104,18 @@ class Signal {
         const output = (this.value instanceof Definition)
           ? this.value.definition()
           : this.value
+
+        // If it's not an object then just return it right away
+        // Cleaner and faster than the alternative approach of constructing a Reactor
+        // and catching an error
+        if (output === null) return output
+        if (typeof output !== 'function' && typeof output !== 'object') return output
+
         // Wrap the output in a Reactor if it's an object
         // No need to wrap it if its already a Reactor
         if (Reactors.has(output)) return output
-        // Check to see if we've wrapped this object before
-        // This allows consistency of dependencies with repeated read calls
-        let reactor = this.reactorCache.get(output)
-        if (reactor) return reactor
         // If not then wrap and store it for future reads
-        try {
-          reactor = new Reactor(output)
-          this.reactorCache.set(output, reactor)
-          return reactor
-        // Assume TypeError means it was not an object
-        // In that case just return the plain output
-        } catch (error) {
-          if (error.name === 'TypeError') return output
-          throw error
-        }
+        return new Reactor(output)
       },
 
       // Life of a write
@@ -142,7 +138,7 @@ class Signal {
         Array.from(this.dependents).forEach(dependent => {
           try {
             if (batcher) batcher.add(dependent)
-            else dependent.notify()
+            else dependent.trigger()
           } catch (error) { errorList.push(error) }
         })
         // If any errors occured during propagation
@@ -211,6 +207,14 @@ class Signal {
 const Reactors = new WeakSet()
 class Reactor {
   constructor (initializedSource) {
+    // Trying to reactor map a reactor does
+    if (Reactors.has(initializedSource)) return initializedSource
+
+    // Check to see if we've wrapped this object before
+    // This allows consistency of dependencies with repeated read calls
+    const existingReactor = reactorCache.get(initializedSource)
+    if (existingReactor) return existingReactor
+
     // The source is the internal proxied object
     // If no source is provided then provide a new default object
     if (arguments.length === 0) initializedSource = {}
@@ -226,7 +230,29 @@ class Reactor {
       // This allows compound function calls like "Array.push"
       // to only trigger one round of observer updates
       apply (thisArg, argumentsList) {
-        return batch(() => Reflect.apply(this.source, thisArg, argumentsList))
+        return batch(() => {
+          // For native object methods which cant use a Proxy as `this`
+          // try again with the underlying object
+          // Some limitations if the failed attempt has side effects this will double up
+          // Also this still wont fix being unable to pass the proxy to static methods
+          // `proxiedMap.keys()` will work because keys gets wrapped by this handler
+          // `Map.prototype.keys.call(proxiedMap)` won't work because it doesnt get wrapped
+          try {
+            return Reflect.apply(this.source, thisArg, argumentsList)
+          } catch (error) {
+            if (error.name === 'TypeError') {
+              const core = coreExtractor.get(thisArg)
+              if (typeof core !== 'undefined') {
+                // Note that this.source and core.source are different
+                // core.source is the underlying object
+                // this.source is the function which is being called with the object as `this`
+                return Reflect.apply(this.source, core.source, argumentsList)
+              }
+            }
+            // If any other type of error, or if there's nothing to unwrap throw error anyway
+            throw error
+          }
+        })
       },
 
       // Instead of reading a property directly
@@ -256,7 +282,29 @@ class Reactor {
         // This enables automatic dependency tracking
         const signalCore = coreExtractor.get(this.getSignals[property])
         signalCore.removeSelf = () => delete this.getSignals[property]
-        const currentValue = Reflect.get(this.source, property, receiver)
+        const currentValue = (() => {
+          // Handle getters which require hidden/native properties
+          // If putting the proxy as `this` fails then reveal the underlying object
+          // There are limitations though
+          // - If the getter have any side effects on error this will trigger them twice
+          // - If the getter also reads other public properties this will not build dependencies
+          // For example this will fail to build a dependency on `this.normalProp` if proxied
+          // get (prop) {
+          //   return this.#hiddenProp + this.normalProp
+          // }
+          // This is sort of a necessary limitation of dealing with native code though
+          // Better than failing overall?
+          // An alternative is to detect the "nativeness" of an object and pass through
+          // That seems quite messy though
+          try {
+            return Reflect.get(this.source, property, receiver)
+          } catch (error) {
+            // We trim to TypeError to minimize unnecessary double retries to actual proxy problems
+            // but it could still happen for other TypeErrors
+            if (error.name === 'TypeError') return Reflect.get(this.source, property, this.source)
+            throw error
+          }
+        })()
         signalCore.value = currentValue
         return signalCore.read()
       },
@@ -299,12 +347,12 @@ class Reactor {
         const didSucceed = Reflect.defineProperty(
           this.source, property, descriptor
         )
-        // Notify dependents before returning
+        // Trigger dependents before returning
         this.trigger(property)
         return didSucceed
       },
 
-      // Transparently delete the property but also notify dependents
+      // Transparently delete the property but also trigger dependents
       deleteProperty (property) {
         const didSucceed = Reflect.deleteProperty(this.source, property)
         this.trigger(property)
@@ -414,17 +462,18 @@ class Reactor {
     // Register the reactor for debugging/typechecking purposes
     coreExtractor.set(reactorInterface, reactorCore)
     Reactors.add(reactorInterface)
+    reactorCache.set(initializedSource, reactorInterface)
     return reactorInterface
   }
 }
 
 // Observers are functions which automatically track their dependencies
-// They are triggered first on initialization
-// They are automatically retriggered whenever a dependency is updated
+// Once triggered they automatically retrigger whenever a dependency is updated
+// A dependency is any read of Signal or property of a Reactor
+// Triggering an observer with parameters saves them for future auto triggers
 // Observers can be stopped and restarted
 // Starting after stopping causes the Observer to execute again
 // Starting does nothing if an Observer is already awake
-// To prevent infinite loops an error is thrown if an Observer triggers itself
 // -----------------------------------------------------------------------------
 // Examples
 // let a = new Signal(1);
@@ -434,6 +483,7 @@ class Reactor {
 //   console.log("a is now " + a());          a or b.foo are updated
 //   console.log("b.foois now " + b.foo);
 // })
+// observer()
 // a(2);                                      This will trigger an update
 //
 // observer.stop();                           This will block triggers
@@ -443,47 +493,32 @@ class Reactor {
 //                                            and allow updates again
 //
 // observer.start();                          Does nothing since already started
-const observerRegistry = new WeakRefMap()
-const observerMembership = new WeakSet()
+const observerMembership = new WeakSet() // To check if something is an Observer
 class Observer {
-  constructor (key, execute, unobserve) {
-    // The triggered and observed block of code
+  constructor (execute) {
+    // Parameter validation
     if (typeof execute !== 'function') {
       throw new TypeError('Cannot create observer with a non-function')
-    }
-
-    // Check to see if there's an existing observer to override
-    // instead of making a new one
-    if (typeof key !== 'undefined' && key !== null) {
-      const existingObserver = observerRegistry.get(key)
-      if (existingObserver) return existingObserver(execute)
     }
 
     // Internal engine of an Observer for how it works
     // All actual functionality & state should be built into the core
     // Should be completely agnostic to syntactic sugar
     const observerCore = {
+      // Core function the observer is wrapping
       execute,
-      // flag on whether this is a unobserve block
-      // Avoids creating dependencies in that case
-      unobserve,
-      // Whether further triggers and updates are allowed
-      // Start asleep - this allows configuration of subscribers/context first
+      // Whether automatic triggers will be accepted
       awake: false,
-      // Whether the block is currently executing
-      // prevents further triggered executions
-      executing: false,
       // The Signals the execution block reads from
-      // at last trigger
+      // Cleared and rebuilt at every trigger
+      // Store dependencies weakly to avoid memory loops
+      // They're only stored to break the connection later anyway
       dependencies: new WeakRefSet(),
-      // Provided to the execute function when it triggers
-      // Can be set externally
-      // Allows information to be provided outside of when its defined
-      // Don't actually initialize context so that it defaults to undefined
-      // context,
-      // callbacks which will be given the execute return value
-      // when triggered
-      subscribers: new Set(),
+      // Stored return value of the last successful execute
+      // Stored in a Signal which makes it observable itself
+      value: new Signal(),
+      // Flag on whether this is a unobserve block
+      // Avoids creating dependencies in that case
 
       // Symmetrically removes dependencies
       clearDependencies () {
@@ -496,171 +531,108 @@ class Observer {
         this.dependencies = new WeakRefSet()
       },
 
-      // Store dependencies weakly to avoid memory loops
-      // They're only stored to break the connection later anyway
+      // External call to add a dependency
+      // Wrapped to to encapsulate implementation
       addDependency (dependency) {
         this.dependencies.add(dependency)
       },
 
-      notify () {
+      // Trigger the execute block and build dependencies
+      // Does nothing if observer is asleep
+      trigger () {
         if (this.awake) {
-          // Avoid infinite loops by throwing an error if we
-          // try to trigger an already executing observer
-          if (this.executing) {
-            throw new LoopError(
-              'observer attempted to activate itself while already executing'
-            )
-          }
-          // Execute the observed function after setting the dependency stack
           this.clearDependencies()
-          if (unobserve) dependencyStack.push(null)
-          else dependencyStack.push(this)
-          this.executing = true
+          // Put self on the dependency stack
+          // So any signals read by execute know who is calling
+          dependencyStack.push(this)
           let result
+          // Wrap execute in a try block so that
+          // dependency stack is popped even if an error is occured
+          // Allows users to catch errors themselves and handle them
           try {
-            result = this.execute(this.context)
+            result = this.execute.apply(null, this.context)
           } finally {
             dependencyStack.pop()
-            this.executing = false
           }
-          // After main trigger, trigger any callbacks
-          // Potential for infinite loop here if a callback triggers the observer again
-          // Maybe i'm okay with that? there's legitimate use cases for this
-          this.callback(result)
-        }
-      },
-
-      // Trigger the execution block and find its dependencies
-      // TODO should triggers build dependencies?
-      // One option is is awake yes. If asleep then no?
-      // What if trigger is called within another observer?
-      // Should it "wrap" like an unobserve?
-      // Or just be another function call
-      // Argument I think is that it is another function call
-      trigger () {
-        const result = this.execute(this.context)
-        this.callback(result)
-      },
-
-      // Fire all callbacks with the result
-      // If any errors occured during callbacks
-      // consolidate and throw them
-      callback (result) {
-        const errorList = []
-        for (const subscriber of this.subscribers) {
-          try {
-            subscriber(result)
-          } catch (error) {
-            errorList.push(error)
-          }
-        }
-        if (errorList.length === 1) {
-          throw errorList[0]
-        } else if (errorList.length > 1) {
-          const errorMessage = 'Multiple errors from observer callbacks'
-          throw new CompoundError(errorMessage, errorList)
+          // Store the result as a subscribable signal
+          // This will trigger any downstream observers
+          // which depend on this observers value
+          this.value(result)
+          return this.value()
         }
       },
 
       // Redefines the observer with a new exec function
+      // Maintains the context, Signal dependents, and awake status
       redefine (newExecute) {
         if (typeof newExecute !== 'function') {
           throw new TypeError('Cannot create observer with a non-function')
         }
         this.clearDependencies()
-        this.awake = false
-        this.executing = false
         this.execute = newExecute
-        // Leave context as is
-        // Leave subscribers as is
+        // If awake this will update the value Signal and notify observers downstream
+        // If alseep this will correctly do nothing leaving value to the last triggered value
+        this.trigger()
       },
 
       // Pause the observer preventing further triggers
+      // Returns false if it was already asleep
+      // Returns true if it was awake
       stop () {
+        if (!this.awake) return false
         this.awake = false
         this.clearDependencies()
+        return true
       },
 
       // Restart the observer if it is not already awake
-      // force start retriggers even if its already awake
-      start ({ force = false } = {}) {
-        if (this.awake && !force) return
+      // Returns false is already awake
+      // Returns true if it was woken up
+      start () {
+        if (this.awake) return false
         this.awake = true
-        this.notify()
-      },
-
-      // Callbacks with the observer return value
-      subscribe (callback) {
-        this.subscribers.add(callback)
-        const unsubscribe = () => this.subscribers.delete(callback)
-        return unsubscribe
-      },
-
-      // Wipes the observer clean for disposal
-      clear () {
-        this.clearDependencies()
-        this.execute = null
-        this.unobserve = null
-        this.awake = null
-        this.executing = null
-        this.dependencies = null
-        this.subscribers = null
+        this.trigger()
+        return true
       }
 
     }
 
     // Public interace to hide the ugliness of how observers work
-    const observerInterface = function (execute) {
-      // AN empty call force triggers the block and turns it on
-      // Equivalent to force starting wth observer.start({ 'force': true })
-      if (arguments.length === 0) {
-        observerCore.start({ force: true })
-      } else {
-        observerCore.redefine(execute)
-      }
-      return observerInterface
+    // An empty call force triggers the block and turns it on
+    // A call with arguments gets those arguments passed as a context
+    // for that and future retriggers
+    const observerInterface = function () {
+      if (arguments.length > 0) observerCore.context = arguments
+      observerCore.awake = true
+      return observerCore.trigger()
     }
     observerInterface.stop = () => observerCore.stop()
     observerInterface.start = (force) => observerCore.start(force)
-    observerInterface.notify = () => observerCore.notify()
     observerInterface.trigger = () => observerCore.trigger()
-    observerInterface.subscribe = (callback) => observerCore.subscribe(callback)
-    observerInterface.clear = () => observerCore.clear()
-    // Allow someone handling the observer to set and get context
-    Object.defineProperty(observerInterface, 'context', {
-      get () { return observerCore.context },
-      set (newValue) { return (observerCore.context = newValue) }
+    // Expose the wrapped execute function
+    // Setting it keeps the context and dependents
+    // but puts the observer back to sleep
+    Object.defineProperty(observerInterface, 'execute', {
+      get () { return observerCore.execute },
+      set (newValue) { return observerCore.redefine(newValue) }// TODO check return value
+    })
+    // Allow reads of the last return value of execute
+    // As a Signal this itself is observable and
+    // builds dependencies if done within another observer
+    Object.defineProperty(observerInterface, 'value', {
+      get () { return observerCore.value() }
     })
 
-    // Register the observer for potential overriding later
+    // Register the observer for isObserver checking later
     coreExtractor.set(observerInterface, observerCore)
-    if (typeof key !== 'undefined') {
-      observerRegistry.set(key, observerInterface)
-    }
     observerMembership.add(observerInterface)
 
     // Does not trigger on initialization until () or .start() are called
     return observerInterface
-
-    // TODO figure out start stop calls vs ()
-    // start - kicks off if asleep. Multiple calls do nothing
-    // () - kicks off if asleep. Multiple calls manually do mulktiple trigger
-    // once - does not awake if asleep. Multiple calls manually do multiple triggers
   }
 }
-const observe = (arg1, arg2) => {
-  // Argument parsing
-  // If only one argument is given then it needs to be an execute block
-  // If 2 are presented then the first one is treated as an override key
-  let key
-  let execute
-  if (typeof arg2 === 'undefined') {
-    execute = arg1
-  } else {
-    key = arg1
-    execute = arg2
-  }
-  return new Observer(key, execute)
+const observe = (execute) => {
+  return new Observer(execute)
 }
 
 const isObserver = (candidate) => observerMembership.has(candidate)
@@ -668,13 +640,14 @@ const isObserver = (candidate) => observerMembership.has(candidate)
 // Unobserve is syntactic sugar to create a dummy observer to block the triggers
 // While also returning the contents of the block
 const unobserve = (execute) => {
-  let output
-  const observer = new Observer(null, () => {
-    output = execute()
-  }, true)
-  observer()
-  observer.stop()
-  return output
+  let result
+  dependencyStack.push(null)
+  try {
+    result = execute()
+  } finally {
+    dependencyStack.pop()
+  }
+  return result
 }
 
 // Method for allowing users to batch multiple observer updates together
@@ -684,24 +657,28 @@ const batch = (execute) => {
     // Set a global batcher so signals know not to trigger observers immediately
     // Using a set allows the removal of redundant triggering in observers
     batcher = new Set()
+    let batchedObservers = []
     // Execute the given block and collect the triggerd observers
-    result = execute()
+    try {
+      result = execute()
+    } finally {
+      // Clear the batching mode
+      // This needs to be done before observer triggering in case any observers
+      // subsequently themselves trigger batches
+      // This also needs to be done first before throwing errors
+      // Otherwise the thrown errors will mean we never unset the batcher
+      // This will cause subsequent triggers to get stuck in this dead batcher
+      // Never to be executed
+      batchedObservers = Array.from(batcher) // Make a copy to freeze it
+      batcher = null
+    }
 
-    // Clear the batching mode
-    // This needs to be done before observer triggering in case any observers
-    // subsequently themselves trigger batches
-    // This also needs to be done first before throwing errors
-    // Otherwise the thrown errors will mean we never unset the batcher
-    // This will cause subsequent triggers to get stuck in this dead batcher
-    // Never to be executed
-    const batchedObservers = Array.from(batcher) // Make a copy to freeze it
-    batcher = null
     // Trigger the collected observers
     // If an error occurs, collect it and keep going
     // A conslidated error will be thrown at the end of propagation
     const errorList = []
     batchedObservers.forEach(observer => {
-      try { observer.notify() } catch (error) { errorList.push(error) }
+      try { observer.trigger() } catch (error) { errorList.push(error) }
     })
 
     // If any errors occured during propagation
@@ -719,16 +696,15 @@ const batch = (execute) => {
   return result
 }
 
-// Custom Error class to indicate loops in observer triggering
-class LoopError extends Error {
-  constructor (...args) {
-    super(...args)
-    this.name = this.constructor.name
-    return this
-  }
+// Method for extracting a the internal object from the Reactor
+const shuck = (reactor) => {
+  const core = coreExtractor.get(reactor)
+  if (core) return core.source
+  // In this case its a normal object. No need to shuck
+  return reactor
 }
 
-// Custom Error class to consolidate multiple errors together
+// Custom Error to consolidate multiple errors together
 class CompoundError extends Error {
   constructor (message, errorList) {
     // Flatten any compound errors in the error list
@@ -752,9 +728,11 @@ class CompoundError extends Error {
 
 export {
   Reactor,
+  Signal,
   isObserver,
   observe,
   unobserve,
   batch,
+  shuck,
   define
 }

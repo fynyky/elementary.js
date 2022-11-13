@@ -1,7 +1,8 @@
 /* esline-env browser */
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
-class Observer {} // TODO fill this out
+import { isObserver, observe } from './reactor.js'
+
 const validHTMLTags = Object.freeze([
   'a', 'abbr', 'acronym', 'address', 'applet', 'area', 'article', 'aside', 'audio',
   'b', 'bdi', 'base', 'basefont', 'bdo', 'big', 'blockquote', 'body', 'br', 'button',
@@ -28,12 +29,13 @@ const validHTMLTags = Object.freeze([
 ])
 
 // Maps normal Elements to their elInterface which enables the magic
+// Used to stop the observers when disconnected from the document
 const elCache = new WeakMap()
 
 // Setup a mutation observer
 // If an element is removed from the document then turn it off
 // Have to account for nodes being added to removed outside of the document
-const mutationObserver = new MutationObserver((mutationList, mutationObserver) => {
+const documentObserver = new MutationObserver((mutationList, mutationObserver) => {
   // Compile a flat set of added/removed elements
   const addedAndRemovedElements = new Set()
   for (const mutationRecord of mutationList) {
@@ -54,24 +56,41 @@ const mutationObserver = new MutationObserver((mutationList, mutationObserver) =
       const elementElInterface = elCache.get(element)
       if (elementElInterface) {
         if (document.contains(element)) {
-          elementElInterface.observers.forEach(obs => obs.start())
+          for (const obs of elementElInterface.observers) {
+            obs.start()
+          }
         } else {
-          elementElInterface.observers.forEach(obs => obs.stop())
+          for (const obs of elementElInterface.observers) {
+            obs.stop()
+          }
         }
       }
     })
   }
 
 })
-mutationObserver.observe(document, { subtree: true, childList: true })
+documentObserver.observe(document, { subtree: true, childList: true })
 
-// Cleans up observers which belong to lost elements
-const obsCleanup = new FinalizationRegistry((orphanObservers) => {
-  for (const orphanObserver of orphanObservers) orphanObserver(null)
+// Tracks when observer comment placeholders are removed
+// When they are remove their partner as well and deactivate their observer
+// Maps the observer start end and observer itself to each other
+const observerTrios = new WeakMap()
+const commentObserver = new MutationObserver((mutationList, mutationObserver) => {
+  for (const mutationRecord of mutationList) {
+    for (const removedNode of Array.from(mutationRecord.removedNodes)) {
+      const observerTrio = observerTrios.get(removedNode)
+      if (observerTrio) {
+        observerTrio.start.remove()
+        observerTrio.end.remove()
+        observerTrio.observer.stop() // Should this be clear? possibility for reattachment?
+      }
+    }
+  }
 })
 
+
 // Helper function to do things to all elements in a subtree
-const subtreeDo = (target, callback) => {
+function subtreeDo (target, callback) {
   if (!(target instanceof Element)) throw new TypeError(
     "target is not an instance of Element"
   )
@@ -81,6 +100,25 @@ const subtreeDo = (target, callback) => {
   const descendents = target.getElementsByTagName('*')
   callback(target)
   for (const descendent of descendents) callback(descendent)
+}
+
+// Helper function to get all nodes between 2 nodes
+function getNodesBetween(startNode, endNode) {
+  if (
+    startNode.parentNode === null ||
+    endNode.parentNode === null ||
+    startNode.parentNode !== endNode.parentNode
+  ) throw new RangeError('endNode could not be reached from startNode')
+  let result = []
+  let currentNode = startNode.nextSibling
+  while(currentNode !== endNode) {
+    if (currentNode === null) {
+      throw new RangeError('endNode could not be reached from startNode')
+    }
+    result.push(currentNode)
+    currentNode = currentNode.nextSibling
+  }
+  return result
 }
 
 // TODO fill out the query stuff filter
@@ -97,7 +135,6 @@ export const el = (descriptor, ...children) => {
   // If its an existing element dont do anything
   let self
   // Trivial case when given an element
-  // TODO: Should this be a Node instead of Element?
   if (descriptor instanceof Element) {
     self = descriptor
   // If its a selector then find the thing
@@ -123,11 +160,13 @@ export const el = (descriptor, ...children) => {
   let elInterface = elCache.get(self)
   if (typeof elInterface === 'undefined') {
     elInterface = {
-      observers: []
+      // Map of observers to a Set of elements they create
+      // Should this be weakrefmap?
+      observers: new Set() 
     }
-    obsCleanup.register(self, elInterface.observers)
     elCache.set(self, elInterface)
   }
+  commentObserver.observe(self, { subtree: false, childList: true })
 
   // For the children
   // If its a string, then just append it as a text node child
@@ -135,38 +174,118 @@ export const el = (descriptor, ...children) => {
   // If its a function, execute it in the context. Append return values
   // If its an observer ???
   // TODO should handle documentFragments?
-  function append (child) {
-    if (typeof child === 'string') self.appendChild(document.createTextNode(child))
-    else if (child instanceof Element) self.appendChild(child)
-    else if (child instanceof Observer) {
-      // TODO need to rebuild observers to not starting automatically
-      // and be able to be given an owner
-      // Also have the owner work with both manually passed in as argument
-      // As well as implicitly in the this call
-      elInterface.observers.push(child)
+  function append (child, insertionPoint) {
+    // TODO consider span wrapping -> This will allow observers to clear themselves better?
+    if (typeof child === 'string') {
+      const textNode = document.createTextNode(child)
+      if (insertionPoint) self.insertBefore(textNode, insertionPoint)
+      else self.appendChild(textNode)
+    } else if (child instanceof Element || child instanceof DocumentFragment) {
+      if (insertionPoint) self.insertBefore(child, insertionPoint)
+      else self.appendChild(child)
+    // Observers work similarly to functions
+    // but with comment "bookends" on to demark their position
+    // On initial commitment. Observers work like normal functions
+    // On subsequent triggers. Observers first clear everything
+    // between bookends
+    } else if (isObserver(child)) {
+      let observerStartNode, observerEndNode
+      elInterface.observers.add(child)
       child.context = self
-      child()
+      // Start with the opening bookend
+      observerStartNode = document.createComment('observerStart')
+      if (insertionPoint) self.insertBefore(observerStartNode, insertionPoint)
+      else self.appendChild(observerStartNode)
+      // Setup the observer itself
+      child.subscribe((result) => {
+        if (typeof result !== 'undefined') {
+          // If there is no end node yet then just continue to append like normal
+          // This is to allow for the use of $.appendChild in the observer like 
+          // you would in a normal function
+          if (typeof observerEndNode === 'undefined') {
+            append(result, insertionPoint)
+          // Check if the bookmarks are still attached before appending
+          // Clear everything in between the bookmarks
+          // Then insert between them
+          } else if (observerEndNode.parentNode === self) {
+            const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
+            // Clean up the old nodes
+            // Any missing nodes 
+            for (const oldChild of oldChildren) {
+              oldChild.remove()
+              // If we remove an inner observer marker clear it up
+              const oldObserverTrio = observerTrios.get(oldChild)
+              if (oldObserverTrio) {
+                oldObserverTrio.observer.stop()
+                elInterface.observers.delete(oldObserverTrio.observer)
+              }
+            }
+            append(result, observerEndNode)
+          // Anchors no longer attached can discard the observer
+          } else {
+            child.clear()
+            elInterface.observers.delete(child)
+          }
+        }
+      })
+      // If element is already in the document trigger it to start the observer
+      // If it is not yet in the document then do an initial populating fire
+      // It will get started by the global MutationObserver
+      // TODO: double triggering? Once when created and again when attached to DOM?
+      if (document.contains(self)) child()
+      else child.trigger()
+      // Close with a bookend to mark the range of children owned
+      observerEndNode = document.createComment('observerEnd')
+      if (insertionPoint) self.insertBefore(observerEndNode, insertionPoint)
+      else self.appendChild(observerEndNode)
+      // Keep a mapping of the end comment to the observer
+      // Lets the observer be cleaned up when the owning comment is removed
+      const observerTrio = {
+        start: observerStartNode,
+        end: observerEndNode,
+        observer: child
+      }
+      observerTrios.set(observerStartNode, observerTrio)
+      observerTrios.set(observerEndNode, observerTrio)
+      observerTrios.set(child, observerTrio)
+
     // Need this to come after cos observers are functions themselves
     // we use call(self, self) to provide this for traditional functions
     // and to provide (ctx) => {...} for arrow functions
     } else if (typeof child === 'function') {
       const result = child.call(self, self)
       // TODO wrap this in a try block (fail cleanly if nothing to append?)
-      if (typeof result !== 'undefined') append(result)
+      if (typeof result !== 'undefined') append(result, insertionPoint)
     // Arrays are handled recursively
     } else if (child instanceof Array) {
-      child.forEach(grandChild => append(grandChild))
-    // TODO write better error message
+      child.forEach(grandChild => append(grandChild, insertionPoint))
     } else {
-      throw new TypeError('expects string, function, or an Element')
+      throw new TypeError('expects string, function, an Element, or an Array of them')
     }
   }
-  children.forEach(append)
+  children.forEach((child) => append(child))
 
-  // TODO: if i'm elling everything from document all the way down, then wont this over trigger?
-  // Maybe have the mutation observer defined outside of el? That way it should replace itself?
-  // Does it trigger anyway for each subtree?
-  // Tested. It does multi trigger even with the same mutation observer observing multiple
-
+  // Return the raw DOM element
+  // Magic wrapping held in a pocket dimension outside of time and space
   return self
 }
+
+
+// shorthand for attribute setting
+// el('foo', attribute('id', 'bar'))
+export function attr (attribute, value) {
+  return ($) => {
+    $.setAttribute(attribute, value)
+  }
+}
+
+// shorthand for binding 
+// el('input', attribute('type', 'text'), bind(rx, 'foo'))
+export function bind (reactor, key) {
+  return ($) => {
+    $.oninput = () => reactor[key] = $.value
+    return observe(() => $.value = reactor[key] )
+  }
+}
+
+export * from './reactor.js'
