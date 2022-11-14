@@ -318,8 +318,39 @@ describe("Reactivity", () => {
       done()
     }, 10)  
   })
+  it('test for a simple element triggering', (done) => {
+    const rx = new Reactor()
+    rx.title = 'foo'
+    const result = el('article', ob(() => {
+      console.log("outer")
+      return ob(() => {
+        console.log('inner')
+        return rx.title
+      })
+    }))
+    assert.equal(
+      result.outerHTML,
+      '<article class="article"><!--observerStart--><!--observerStart-->foo<!--observerEnd--><!--observerEnd--></article>'
+    )
+    console.log("about to set bar")
+    rx.title = 'bar'
+    console.log("done set bar")
+    document.body.appendChild(result)
+    setTimeout(() => {
+      console.log("landed in timeout")
+      assert.equal(
+        result.outerHTML,
+        '<article class="article"><!--observerStart--><!--observerStart-->bar<!--observerEnd--><!--observerEnd--></article>'
+      )
+      console.log("about to set baz")
+      rx.title = 'baz'
+      console.log("done set baz")
+      result.remove()
+      done()
+    }, 10)
+  })
 
-  it.only('updates a complex element', (done) => { 
+  it('updates a complex element', (done) => { 
     const rx = new Reactor()
     rx.title = 'foo'
     rx.paragraphs = [
@@ -331,10 +362,17 @@ describe("Reactivity", () => {
       el('h1', ob(() => rx.title )),
       ob(() => rx.paragraphs.map((paragraph) => [
         el('p', ob(($) => {
+          console.log("paragraph observer", $)
           $.setAttribute('id', paragraph.id)
           return paragraph.content
         })),
-        ob(() => el('h3', ob(() => paragraph.time)))
+        ob(() => {
+          console.trace("outer h3 observer")
+          return el('h3', ob(() => {
+            console.log("inner h3 observer")
+            return paragraph.time
+          }))
+        })
       ]))
     )
     assert.equal(
@@ -348,16 +386,21 @@ describe("Reactivity", () => {
       '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
     )
     setTimeout(() => {
+      console.warn("landed in timeout")
       assert.equal(
         result.outerHTML,
         '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
       )
+      console.warn("setting bloop bloop bloop")
       rx.paragraphs[0].content = 'bloop bloop bloop'
+      console.warn("done setting bloop bloop bloop")
       assert.equal(
         result.outerHTML,
         '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
       )
+      console.warn("setting 987")
       rx.paragraphs[2].time = '987'
+      console.warn("done setting 987")
       console.log(result.outerHTML)
       assert.equal(
         result.outerHTML,

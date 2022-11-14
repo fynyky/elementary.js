@@ -229,13 +229,15 @@ export const el = (descriptor, ...children) => {
             append(result, observerEndNode)
           // Anchors no longer attached can discard the observer
           } else {
-            child.clear()
+            child.stop()
             elInterface.observers.delete(child)
           }
         }
       })()
       // Kickoff the observer with a context of self
-      child(self)
+      child.context = [self]
+      child.stop()
+      child.start()
       // If it is not yet in the document then stop observer from triggering further
       if (!document.contains(self)) child.stop()
       // Close with a bookend to mark the range of children owned
