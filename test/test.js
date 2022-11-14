@@ -206,7 +206,7 @@ describe("Reactivity", () => {
     }, 10)
   })
 
-  it('can take ested observers', (done) => {
+  it('can take nested observers', (done) => {
     const result = el("foo", ob(() => {
       return ob(() => {
         return 'bar'
@@ -285,17 +285,17 @@ describe("Reactivity", () => {
     const rx = new Reactor()
     rx.bar = 'baz'  
     const result = el("foo", ob(() => rx.bar))
-    // assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
-    // rx.bar = 'qux'
-    // assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
-    // document.body.appendChild(result)
-    // setTimeout(() => {
-    //   assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->qux<!--observerEnd--></div>')
-    //   rx.bar = 'corge'
-    //   assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->corge<!--observerEnd--></div>')
-    //   result.remove()
-    //   done()
-    // }, 10)
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+    rx.bar = 'qux'
+    assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
+    document.body.appendChild(result)
+    setTimeout(() => {
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->qux<!--observerEnd--></div>')
+      rx.bar = 'corge'
+      assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->corge<!--observerEnd--></div>')
+      result.remove()
+      done()
+    }, 10)
   })
 
   it('updates an observer element', (done) => { 
@@ -319,13 +319,13 @@ describe("Reactivity", () => {
     }, 10)  
   })
 
-  it('updates a complex element', (done) => { 
+  it.only('updates a complex element', (done) => { 
     const rx = new Reactor()
     rx.title = 'foo'
     rx.paragraphs = [
-      { id: 'bar', content: 'Lorem ipsum dolor sit amet', time: '1'},
-      { id: 'baz', content: 'Ut enim ad minim veniam', time: '2'},
-      { id: 'qux', content: 'Duis aute irure dolor in reprehenderit', time: '3'}
+      { id: 'bar', content: 'Lorem ipsum dolor sit amet', time: '123'},
+      { id: 'baz', content: 'Ut enim ad minim veniam', time: '456'},
+      { id: 'qux', content: 'Duis aute irure dolor in reprehenderit', time: '789'}
     ]
     const result = el("article",
       el('h1', ob(() => rx.title )),
@@ -339,28 +339,29 @@ describe("Reactivity", () => {
     )
     assert.equal(
       result.outerHTML,
-      '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+      '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
     )
     document.body.appendChild(result)
     rx.title = 'corge'
     assert.equal(
       result.outerHTML,
-      '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+      '<article class="article"><h1 class="h1"><!--observerStart-->foo<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
     )
     setTimeout(() => {
       assert.equal(
         result.outerHTML,
-        '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+        '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->Lorem ipsum dolor sit amet<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
       )
       rx.paragraphs[0].content = 'bloop bloop bloop'
       assert.equal(
         result.outerHTML,
-        '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->3<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+        '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->789<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
       )
       rx.paragraphs[2].time = '987'
+      console.log(result.outerHTML)
       assert.equal(
         result.outerHTML,
-        '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->1<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->2<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->987<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
+        '<article class="article"><h1 class="h1"><!--observerStart-->corge<!--observerEnd--></h1><!--observerStart--><p class="p" id="bar"><!--observerStart-->bloop bloop bloop<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->123<!--observerEnd--></h3><!--observerEnd--><p class="p" id="baz"><!--observerStart-->Ut enim ad minim veniam<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->456<!--observerEnd--></h3><!--observerEnd--><p class="p" id="qux"><!--observerStart-->Duis aute irure dolor in reprehenderit<!--observerEnd--></p><!--observerStart--><h3 class="h3"><!--observerStart-->987<!--observerEnd--></h3><!--observerEnd--><!--observerEnd--></article>'
       )
       result.remove()
       done()

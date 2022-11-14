@@ -181,13 +181,11 @@ export const el = (descriptor, ...children) => {
       if (insertionPoint) self.insertBefore(textNode, insertionPoint)
       else self.appendChild(textNode)
     } else if (child instanceof Element || child instanceof DocumentFragment) {
-      if (insertionPoint) self.insertBefore(child, insertionPoint)
+      if (insertionPoint) self.insertBefore(shuck(child), insertionPoint)
       else {
         try {
-          self.appendChild(child)
+          self.appendChild(shuck(child))
         } catch (error) {
-          console.log("self", self)
-          console.log("child", child)
           throw error
         }
       }
@@ -205,7 +203,7 @@ export const el = (descriptor, ...children) => {
       else self.appendChild(observerStartNode)
       // Observe the observer to append the results
       observe(() => {
-        const result = shuck(child.value)
+        const result = child.value
         if (typeof result !== 'undefined') {
           // If there is no end node yet then just continue to append like normal
           // This is to allow for the use of $.appendChild in the observer like 
