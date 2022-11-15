@@ -235,7 +235,7 @@ export const el = (descriptor, ...children) => {
         }
       })()
       // Kickoff the observer with a context of self
-      child.context = [self]
+      child.setContext(self)
       child.stop()
       child.start()
       // If it is not yet in the document then stop observer from triggering further
