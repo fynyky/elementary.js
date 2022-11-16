@@ -97,6 +97,19 @@ describe("Element creation", () => {
     assert(result.outerHTML === '<div class="foo">bar</div>')
   })
 
+  it('can fill an element with a Promise', (done) => {
+    const result = el('foo', new Promise(resolve => {
+      setTimeout(() => {
+        resolve('bar')
+      }, 10)
+    }))
+    assert(result.outerHTML === '<div class="foo"><!--promisePlaceholder--></div>')
+    setTimeout(() => {
+      assert(result.outerHTML === '<div class="foo">bar</div>')
+      done()
+    }, 20)
+  })
+
   it('can fill an element with arrays', () => {
     const result = el("foo", [
       'bar',

@@ -176,6 +176,9 @@ export const el = (descriptor, ...children) => {
   // If its a function, execute it in the context. Append return values
   // If its an observer ???
   function append (child, insertionPoint) {
+    // If the insertion point given is no longer attached
+    // Then abort the insertion
+    if (insertionPoint && insertionPoint.parentElement !== self) return false
     // Strings are just appended as text
     if (typeof child === 'string') {
       const textNode = document.createTextNode(child)
@@ -183,6 +186,16 @@ export const el = (descriptor, ...children) => {
     // Existing elements are just appended
     } else if (child instanceof Element || child instanceof DocumentFragment) {
       self.insertBefore(shuck(child), insertionPoint)
+    // Promises get an immediate placeholder before they resolve
+    // If the placeholder is removed before the promise resolves. Nothing happens
+    // With observers, this means only the latest promise will get handled
+    } else if (child instanceof Promise) {
+      const promisePlaceholder = document.createComment('promisePlaceholder')
+      self.insertBefore(promisePlaceholder, insertionPoint)
+      child.then(value => {
+        append(value, promisePlaceholder)
+        promisePlaceholder.remove()
+      })
     // Observers work similarly to functions
     // but with comment "bookends" on to demark their position
     // On initial commitment. Observers work like normal functions
@@ -213,7 +226,7 @@ export const el = (descriptor, ...children) => {
       observerTrios.set(child, observerTrio)
 
       // Observe the observer to append the results
-      // Check if the bookmarks are still attached before appending
+      // Check if the bookmarks are still attached before acting
       // Clear everything in between the bookmarks (including observers)
       // Then insert new content between them
       observe(() => {
