@@ -144,8 +144,7 @@ export const el = (descriptor, ...children) => {
     newElement.className = descriptor
     self = newElement
   } else {
-    // TODO write better error message
-    throw new TypeError('expects string or Element')
+    throw new TypeError('el descriptor expects string or existing Element')
   }
 
   // Now that we know who we are
@@ -168,12 +167,12 @@ export const el = (descriptor, ...children) => {
   // If its an existing element, then append it as a child
   // If its a function, execute it in the context. Append return values
   // If its an observer ???
-  // TODO should handle documentFragments?
   function append (child, insertionPoint) {
-    // TODO consider span wrapping -> This will allow observers to clear themselves better?
+    // Strings are just appended as text
     if (typeof child === 'string') {
       const textNode = document.createTextNode(child)
       self.insertBefore(textNode, insertionPoint)
+    // Existing elements are just appended
     } else if (child instanceof Element || child instanceof DocumentFragment) {
       self.insertBefore(shuck(child), insertionPoint)
     // Observers work similarly to functions
