@@ -178,17 +178,9 @@ export const el = (descriptor, ...children) => {
     // TODO consider span wrapping -> This will allow observers to clear themselves better?
     if (typeof child === 'string') {
       const textNode = document.createTextNode(child)
-      if (insertionPoint) self.insertBefore(textNode, insertionPoint)
-      else self.appendChild(textNode)
+      self.insertBefore(textNode, insertionPoint)
     } else if (child instanceof Element || child instanceof DocumentFragment) {
-      if (insertionPoint) self.insertBefore(shuck(child), insertionPoint)
-      else {
-        try {
-          self.appendChild(shuck(child))
-        } catch (error) {
-          throw error
-        }
-      }
+      self.insertBefore(shuck(child), insertionPoint)
     // Observers work similarly to functions
     // but with comment "bookends" on to demark their position
     // On initial commitment. Observers work like normal functions
@@ -197,41 +189,31 @@ export const el = (descriptor, ...children) => {
     } else if (isObserver(child)) {
       let observerStartNode, observerEndNode
       elInterface.observers.add(child)
-      // Start with the opening bookend
+      // Start with the bookends marking the observer domain
       observerStartNode = document.createComment('observerStart')
-      if (insertionPoint) self.insertBefore(observerStartNode, insertionPoint)
-      else self.appendChild(observerStartNode)
+      observerEndNode = document.createComment('observerEnd')
+      self.insertBefore(observerStartNode, insertionPoint)
+      self.insertBefore(observerEndNode, insertionPoint)
       // Observe the observer to append the results
       observe(() => {
         const result = child.value
-        if (typeof result !== 'undefined') {
-          // If there is no end node yet then just continue to append like normal
-          // This is to allow for the use of $.appendChild in the observer like 
-          // you would in a normal function
-          if (typeof observerEndNode === 'undefined') {
-            append(result, insertionPoint)
-          // Check if the bookmarks are still attached before appending
+        // Check if the bookmarks are still attached before appending
+        if (typeof result !== 'undefined' && observerEndNode.parentNode === self) {
           // Clear everything in between the bookmarks
           // Then insert between them
-          } else if (observerEndNode.parentNode === self) {
-            const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
-            // Clean up the old nodes
-            // Any missing nodes 
-            for (const oldChild of oldChildren) {
-              oldChild.remove()
-              // If we remove an inner observer marker clear it up
-              const oldObserverTrio = observerTrios.get(oldChild)
-              if (oldObserverTrio) {
-                oldObserverTrio.observer.stop()
-                elInterface.observers.delete(oldObserverTrio.observer)
-              }
+          const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
+          // Clean up the old nodes
+          // Any missing nodes 
+          for (const oldChild of oldChildren) {
+            oldChild.remove()
+            // If we remove an inner observer marker clear it up
+            const oldObserverTrio = observerTrios.get(oldChild)
+            if (oldObserverTrio) {
+              oldObserverTrio.observer.stop()
+              elInterface.observers.delete(oldObserverTrio.observer)
             }
-            append(result, observerEndNode)
-          // Anchors no longer attached can discard the observer
-          } else {
-            child.stop()
-            elInterface.observers.delete(child)
           }
+          append(result, observerEndNode)
         }
       })()
       // Kickoff the observer with a context of self
@@ -240,10 +222,6 @@ export const el = (descriptor, ...children) => {
       child.start()
       // If it is not yet in the document then stop observer from triggering further
       if (!document.contains(self)) child.stop()
-      // Close with a bookend to mark the range of children owned
-      observerEndNode = document.createComment('observerEnd')
-      if (insertionPoint) self.insertBefore(observerEndNode, insertionPoint)
-      else self.appendChild(observerEndNode)
       // Keep a mapping of the end comment to the observer
       // Lets the observer be cleaned up when the owning comment is removed
       const observerTrio = {
