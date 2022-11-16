@@ -116,10 +116,18 @@ function getNodesBetween(startNode, endNode) {
   return result
 }
 
-// TODO fill out the query stuff filter
+
+// Simple check for a query selector over creating a tag
 // Problem is that a plain text string is a valid tag search
-// Stubbing out with dummy functions for now
-const isQuerySelector = () => false
+// We check for the common cases of . # and [
+// Just skip starting with tag search
+const isQuerySelector = (testString) => (
+  typeof testString === 'string' && (
+    testString.startsWith('.') ||
+    testString.startsWith('#') ||
+    testString.startsWith('[') 
+  )
+)
 
 // Main magic element wrapping function
 // First argument is the element to create or wrap

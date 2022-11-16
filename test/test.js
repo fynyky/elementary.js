@@ -50,6 +50,15 @@ describe("Element creation", () => {
     assert(result.outerHTML === '<div></div>')
   })
 
+  it('can grab an existing element by query', () => {
+    const base = document.createElement("div")
+    base.className = "foo"
+    assert.equal(base.outerHTML, '<div class="foo"></div>')
+    document.body.appendChild(base)
+    const result = el('.foo')
+    assert(result === base)
+  })
+
   it('can fill an element with text', () => {
     const result = el("foo", 'bar')
     assert.equal(result.outerHTML, '<div class="foo">bar</div>')
