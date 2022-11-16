@@ -78,12 +78,7 @@ const observerTrios = new WeakMap()
 const commentObserver = new MutationObserver((mutationList, mutationObserver) => {
   for (const mutationRecord of mutationList) {
     for (const removedNode of Array.from(mutationRecord.removedNodes)) {
-      const observerTrio = observerTrios.get(removedNode)
-      if (observerTrio) {
-        observerTrio.start.remove()
-        observerTrio.end.remove()
-        observerTrio.observer.stop() // Should this be clear? possibility for reattachment?
-      }
+      observerTrios.get(removedNode)?.clear()
     }
   }
 })
@@ -187,51 +182,50 @@ export const el = (descriptor, ...children) => {
     // On subsequent triggers. Observers first clear everything
     // between bookends
     } else if (isObserver(child)) {
-      let observerStartNode, observerEndNode
       elInterface.observers.add(child)
       // Start with the bookends marking the observer domain
-      observerStartNode = document.createComment('observerStart')
-      observerEndNode = document.createComment('observerEnd')
+      const observerStartNode = document.createComment('observerStart')
+      const observerEndNode = document.createComment('observerEnd')
       self.insertBefore(observerStartNode, insertionPoint)
       self.insertBefore(observerEndNode, insertionPoint)
+      // Keep a mapping of the bookends to the observer
+      // Lets the observer be cleaned up when the owning comment is removed
+      const observerTrio = {
+        start: observerStartNode,
+        end: observerEndNode,
+        observer: child,
+        clear: function() {
+          this.start.remove()
+          this.end.remove()
+          this.observer.stop
+          elInterface.observers.delete(this.observer)
+        }
+      }
+      observerTrios.set(observerStartNode, observerTrio)
+      observerTrios.set(observerEndNode, observerTrio)
+      observerTrios.set(child, observerTrio)
+
       // Observe the observer to append the results
+      // Check if the bookmarks are still attached before appending
+      // Clear everything in between the bookmarks (including observers)
+      // Then insert new content between them
       observe(() => {
         const result = child.value
-        // Check if the bookmarks are still attached before appending
         if (typeof result !== 'undefined' && observerEndNode.parentNode === self) {
-          // Clear everything in between the bookmarks
-          // Then insert between them
           const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
-          // Clean up the old nodes
-          // Any missing nodes 
           for (const oldChild of oldChildren) {
             oldChild.remove()
-            // If we remove an inner observer marker clear it up
-            const oldObserverTrio = observerTrios.get(oldChild)
-            if (oldObserverTrio) {
-              oldObserverTrio.observer.stop()
-              elInterface.observers.delete(oldObserverTrio.observer)
-            }
+            observerTrios.get(oldChild)?.clear()
           }
           append(result, observerEndNode)
         }
-      })()
+      }).start()
       // Kickoff the observer with a context of self
       child.setContext(self)
       child.stop()
       child.start()
       // If it is not yet in the document then stop observer from triggering further
       if (!document.contains(self)) child.stop()
-      // Keep a mapping of the end comment to the observer
-      // Lets the observer be cleaned up when the owning comment is removed
-      const observerTrio = {
-        start: observerStartNode,
-        end: observerEndNode,
-        observer: child
-      }
-      observerTrios.set(observerStartNode, observerTrio)
-      observerTrios.set(observerEndNode, observerTrio)
-      observerTrios.set(child, observerTrio)
 
     // Need this to come after cos observers are functions themselves
     // we use call(self, self) to provide this for traditional functions
@@ -241,8 +235,12 @@ export const el = (descriptor, ...children) => {
       // TODO wrap this in a try block (fail cleanly if nothing to append?)
       if (typeof result !== 'undefined') append(result, insertionPoint)
     // Arrays are handled recursively
-    } else if (child instanceof Array) {
-      child.forEach(grandChild => append(grandChild, insertionPoint))
+    // Works for any sort of iterable
+    } else if (typeof child?.[Symbol.iterator] === 'function' ) {
+      for (const grandChild of child) {
+        append(grandChild, insertionPoint)
+      }
+    // Anything else isnt meant to be appended
     } else {
       throw new TypeError('expects string, function, an Element, or an Array of them')
     }
