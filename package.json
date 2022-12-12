@@ -1,10 +1,12 @@
 {
   "name": "elementary.js",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Simple reactive ui building without frameworks",
-  "main": "elementary.js",
+  "source": "src/index.js",
+  "main": "dist/main.js",
+  "type": "module",
   "devDependencies": {
-    "mocha": "^10.1.0",
+    "parcel": "^2.8.1",
     "standard": "^17.0.0"
   },
   "scripts": {
@@ -20,7 +22,6 @@
     "url": "https://github.com/fynyky/elementary.js/issues"
   },
   "homepage": "https://github.com/fynyky/elementary.js#readme",
-  "type": "module",
   "dependencies": {
     "reactorjs": "^2.0.0"
   }

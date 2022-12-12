@@ -1,1 +1,1 @@
-export * from 'src/elementary.js'
+export * from './src/elementary.js'

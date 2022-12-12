@@ -1,9 +1,8 @@
-/* esline-env browser, es2022 */
+/* esline-env browser */
+import { isObserver, observe, shuck } from 'reactorjs'
 
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
-import { isObserver, observe, shuck } from 'reactorjs'
-
 const validHTMLTags = Object.freeze([
   'a', 'abbr', 'acronym', 'address', 'applet', 'area', 'article', 'aside', 'audio',
   'b', 'bdi', 'base', 'basefont', 'bdo', 'big', 'blockquote', 'body', 'br', 'button',
@@ -291,4 +290,4 @@ export function bind (reactor, key) {
   }
 }
 
-export * from '../test/reactor.js'
+export * from 'reactorjs'
