@@ -1,7 +1,8 @@
-/* esline-env browser */
+/* esline-env browser, es2022 */
+
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
-import { isObserver, observe } from './reactor.js'
+import { isObserver, observe, shuck } from 'reactorjs'
 
 const validHTMLTags = Object.freeze([
   'a', 'abbr', 'acronym', 'address', 'applet', 'area', 'article', 'aside', 'audio',
@@ -67,7 +68,6 @@ const documentObserver = new MutationObserver((mutationList, mutationObserver) =
       }
     })
   }
-
 })
 documentObserver.observe(document, { subtree: true, childList: true })
 
@@ -78,40 +78,38 @@ const observerTrios = new WeakMap()
 const commentObserver = new MutationObserver((mutationList, mutationObserver) => {
   for (const mutationRecord of mutationList) {
     for (const removedNode of Array.from(mutationRecord.removedNodes)) {
-      const observerTrio = observerTrios.get(removedNode)
-      if (observerTrio) {
-        observerTrio.start.remove()
-        observerTrio.end.remove()
-        observerTrio.observer.stop() // Should this be clear? possibility for reattachment?
-      }
+      observerTrios.get(removedNode)?.clear()
     }
   }
 })
 
-
 // Helper function to do things to all elements in a subtree
 function subtreeDo (target, callback) {
-  if (!(target instanceof Element)) throw new TypeError(
-    "target is not an instance of Element"
-  )
-  if (!(typeof callback === 'function')) throw new TypeError(
-    "callback is not a function"
-  )
+  if (!(target instanceof Element)) {
+    throw new TypeError(
+      'target is not an instance of Element'
+    )
+  }
+  if (!(typeof callback === 'function')) {
+    throw new TypeError(
+      'callback is not a function'
+    )
+  }
   const descendents = target.getElementsByTagName('*')
   callback(target)
   for (const descendent of descendents) callback(descendent)
 }
 
 // Helper function to get all nodes between 2 nodes
-function getNodesBetween(startNode, endNode) {
+function getNodesBetween (startNode, endNode) {
   if (
     startNode.parentNode === null ||
     endNode.parentNode === null ||
     startNode.parentNode !== endNode.parentNode
   ) throw new RangeError('endNode could not be reached from startNode')
-  let result = []
+  const result = []
   let currentNode = startNode.nextSibling
-  while(currentNode !== endNode) {
+  while (currentNode !== endNode) {
     if (currentNode === null) {
       throw new RangeError('endNode could not be reached from startNode')
     }
@@ -121,10 +119,17 @@ function getNodesBetween(startNode, endNode) {
   return result
 }
 
-// TODO fill out the query stuff filter
+// Simple check for a query selector over creating a tag
 // Problem is that a plain text string is a valid tag search
-// Stubbing out with dummy functions for now
-const isQuerySelector = () => false
+// We check for the common cases of . # and [
+// Just skip starting with tag search
+const isQuerySelector = (testString) => (
+  typeof testString === 'string' && (
+    testString.startsWith('.') ||
+    testString.startsWith('#') ||
+    testString.startsWith('[')
+  )
+)
 
 // Main magic element wrapping function
 // First argument is the element to create or wrap
@@ -149,8 +154,7 @@ export const el = (descriptor, ...children) => {
     newElement.className = descriptor
     self = newElement
   } else {
-    // TODO write better error message
-    throw new TypeError('expects string or Element')
+    throw new TypeError('el descriptor expects string or existing Element')
   }
 
   // Now that we know who we are
@@ -162,7 +166,7 @@ export const el = (descriptor, ...children) => {
     elInterface = {
       // Map of observers to a Set of elements they create
       // Should this be weakrefmap?
-      observers: new Set() 
+      observers: new Set()
     }
     elCache.set(self, elInterface)
   }
@@ -173,81 +177,77 @@ export const el = (descriptor, ...children) => {
   // If its an existing element, then append it as a child
   // If its a function, execute it in the context. Append return values
   // If its an observer ???
-  // TODO should handle documentFragments?
   function append (child, insertionPoint) {
-    // TODO consider span wrapping -> This will allow observers to clear themselves better?
+    // If the insertion point given is no longer attached
+    // Then abort the insertion
+    if (insertionPoint && insertionPoint.parentElement !== self) return false
+    // Strings are just appended as text
     if (typeof child === 'string') {
       const textNode = document.createTextNode(child)
-      if (insertionPoint) self.insertBefore(textNode, insertionPoint)
-      else self.appendChild(textNode)
+      self.insertBefore(textNode, insertionPoint)
+    // Existing elements are just appended
     } else if (child instanceof Element || child instanceof DocumentFragment) {
-      if (insertionPoint) self.insertBefore(child, insertionPoint)
-      else self.appendChild(child)
+      self.insertBefore(shuck(child), insertionPoint)
+    // Promises get an immediate placeholder before they resolve
+    // If the placeholder is removed before the promise resolves. Nothing happens
+    // With observers, this means only the latest promise will get handled
+    } else if (child instanceof Promise) {
+      const promisePlaceholder = document.createComment('promisePlaceholder')
+      self.insertBefore(promisePlaceholder, insertionPoint)
+      child.then(value => {
+        append(value, promisePlaceholder)
+        promisePlaceholder.remove()
+      })
     // Observers work similarly to functions
     // but with comment "bookends" on to demark their position
     // On initial commitment. Observers work like normal functions
     // On subsequent triggers. Observers first clear everything
     // between bookends
     } else if (isObserver(child)) {
-      let observerStartNode, observerEndNode
       elInterface.observers.add(child)
-      child.context = self
-      // Start with the opening bookend
-      observerStartNode = document.createComment('observerStart')
-      if (insertionPoint) self.insertBefore(observerStartNode, insertionPoint)
-      else self.appendChild(observerStartNode)
-      // Setup the observer itself
-      child.subscribe((result) => {
-        if (typeof result !== 'undefined') {
-          // If there is no end node yet then just continue to append like normal
-          // This is to allow for the use of $.appendChild in the observer like 
-          // you would in a normal function
-          if (typeof observerEndNode === 'undefined') {
-            append(result, insertionPoint)
-          // Check if the bookmarks are still attached before appending
-          // Clear everything in between the bookmarks
-          // Then insert between them
-          } else if (observerEndNode.parentNode === self) {
-            const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
-            // Clean up the old nodes
-            // Any missing nodes 
-            for (const oldChild of oldChildren) {
-              oldChild.remove()
-              // If we remove an inner observer marker clear it up
-              const oldObserverTrio = observerTrios.get(oldChild)
-              if (oldObserverTrio) {
-                oldObserverTrio.observer.stop()
-                elInterface.observers.delete(oldObserverTrio.observer)
-              }
-            }
-            append(result, observerEndNode)
-          // Anchors no longer attached can discard the observer
-          } else {
-            child.clear()
-            elInterface.observers.delete(child)
-          }
-        }
-      })
-      // If element is already in the document trigger it to start the observer
-      // If it is not yet in the document then do an initial populating fire
-      // It will get started by the global MutationObserver
-      // TODO: double triggering? Once when created and again when attached to DOM?
-      if (document.contains(self)) child()
-      else child.trigger()
-      // Close with a bookend to mark the range of children owned
-      observerEndNode = document.createComment('observerEnd')
-      if (insertionPoint) self.insertBefore(observerEndNode, insertionPoint)
-      else self.appendChild(observerEndNode)
-      // Keep a mapping of the end comment to the observer
+      // Start with the bookends marking the observer domain
+      const observerStartNode = document.createComment('observerStart')
+      const observerEndNode = document.createComment('observerEnd')
+      self.insertBefore(observerStartNode, insertionPoint)
+      self.insertBefore(observerEndNode, insertionPoint)
+      // Keep a mapping of the bookends to the observer
       // Lets the observer be cleaned up when the owning comment is removed
       const observerTrio = {
         start: observerStartNode,
         end: observerEndNode,
-        observer: child
+        observer: child,
+        clear: function () {
+          this.start.remove()
+          this.end.remove()
+          this.observer.stop
+          elInterface.observers.delete(this.observer)
+        }
       }
       observerTrios.set(observerStartNode, observerTrio)
       observerTrios.set(observerEndNode, observerTrio)
       observerTrios.set(child, observerTrio)
+
+      // Observe the observer to append the results
+      // Check if the bookmarks are still attached before acting
+      // Clear everything in between the bookmarks (including observers)
+      // Then insert new content between them
+      observe(() => {
+        const result = child.value
+        if (typeof result !== 'undefined' && observerEndNode.parentNode === self) {
+          const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
+          for (const oldChild of oldChildren) {
+            oldChild.remove()
+            observerTrios.get(oldChild)?.clear()
+          }
+          append(result, observerEndNode)
+        }
+      }).start()
+      // Kickoff the observer with a context of self
+      child.setContext(self)
+      child.stop()
+      child.start()
+      // If it is not yet in the document then stop observer from triggering further
+      if (!document.contains(self)) child.stop()
 
     // Need this to come after cos observers are functions themselves
     // we use call(self, self) to provide this for traditional functions
@@ -257,8 +257,12 @@ export const el = (descriptor, ...children) => {
       // TODO wrap this in a try block (fail cleanly if nothing to append?)
       if (typeof result !== 'undefined') append(result, insertionPoint)
     // Arrays are handled recursively
-    } else if (child instanceof Array) {
-      child.forEach(grandChild => append(grandChild, insertionPoint))
+    // Works for any sort of iterable
+    } else if (typeof child?.[Symbol.iterator] === 'function') {
+      for (const grandChild of child) {
+        append(grandChild, insertionPoint)
+      }
+    // Anything else isnt meant to be appended
     } else {
       throw new TypeError('expects string, function, an Element, or an Array of them')
     }
@@ -270,7 +274,6 @@ export const el = (descriptor, ...children) => {
   return self
 }
 
-
 // shorthand for attribute setting
 // el('foo', attribute('id', 'bar'))
 export function attr (attribute, value) {
@@ -279,13 +282,13 @@ export function attr (attribute, value) {
   }
 }
 
-// shorthand for binding 
+// shorthand for binding
 // el('input', attribute('type', 'text'), bind(rx, 'foo'))
 export function bind (reactor, key) {
   return ($) => {
     $.oninput = () => reactor[key] = $.value
-    return observe(() => $.value = reactor[key] )
+    return observe(() => $.value = reactor[key])
   }
 }
 
-export * from './reactor.js'
+export * from '../test/reactor.js'

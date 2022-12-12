@@ -1,8 +1,8 @@
 /* esline-env browser */
 /* globals  el */
 
-import { el, attr, bind } from "./elementary.js"
-import { observe as ob, Reactor } from "./reactor.js"
+import { el, attr, bind } from './elementary.js'
+import { observe as ob, Reactor } from 'reactorjs'
 
 // it('testing Proxy on DOM objects', () => {
 //   const proxyHandler = {
@@ -21,7 +21,6 @@ import { observe as ob, Reactor } from "./reactor.js"
 //   div.innerHTML = 'foo'
 // })
 
-
 // it('testing Signal Proxy on DOM objects', () => {
 //   const signal = new Signal()
 //   const parent = document.createElement('div')
@@ -31,28 +30,27 @@ import { observe as ob, Reactor } from "./reactor.js"
 //   parent.appendChild(div)
 // })
 
-describe("Element creation", () => {
-    
+describe('Element creation', () => {
   it('can create a basic div', () => {
-    const result = el("foo")
-    assert.equal(result.outerHTML,'<div class="foo"></div>')
+    const result = el('foo')
+    assert.equal(result.outerHTML, '<div class="foo"></div>')
   })
 
   it('can create a valid HTML tag', () => {
-    const result = el("h1")
+    const result = el('h1')
     assert(result.outerHTML === '<h1 class="h1"></h1>')
   })
 
   it('can wrap an existing element', () => {
-    const base = document.createElement("div")
+    const base = document.createElement('div')
     const result = el(base)
     assert(result === base)
     assert(result.outerHTML === '<div></div>')
   })
 
   it('can grab an existing element by query', () => {
-    const base = document.createElement("div")
-    base.className = "foo"
+    const base = document.createElement('div')
+    base.className = 'foo'
     assert.equal(base.outerHTML, '<div class="foo"></div>')
     document.body.appendChild(base)
     const result = el('.foo')
@@ -60,13 +58,13 @@ describe("Element creation", () => {
   })
 
   it('can fill an element with text', () => {
-    const result = el("foo", 'bar')
+    const result = el('foo', 'bar')
     assert.equal(result.outerHTML, '<div class="foo">bar</div>')
   })
 
   it('can fill an element with another element', () => {
-    const innerElement = el("foo")
-    const result = el("bar", innerElement)
+    const innerElement = el('foo')
+    const result = el('bar', innerElement)
     assert(result.outerHTML === '<div class="bar"><div class="foo"></div></div>')
   })
 
@@ -79,21 +77,21 @@ describe("Element creation", () => {
   })
 
   it('can fill an element with a function', () => {
-    const result = el("foo", $ => {
-      $.innerHTML = "bar"
+    const result = el('foo', $ => {
+      $.innerHTML = 'bar'
     })
     assert(result.outerHTML === '<div class="foo">bar</div>')
   })
 
   it('can fill an element with a function using this', () => {
-    const result = el("foo", function() {
-      this.innerHTML = "bar"
+    const result = el('foo', function () {
+      this.innerHTML = 'bar'
     })
     assert(result.outerHTML === '<div class="foo">bar</div>')
   })
 
   it('can fill an element with a function return', () => {
-    const result = el("foo", () => 'bar')
+    const result = el('foo', () => 'bar')
     assert(result.outerHTML === '<div class="foo">bar</div>')
   })
 
@@ -111,7 +109,7 @@ describe("Element creation", () => {
   })
 
   it('can fill an element with arrays', () => {
-    const result = el("foo", [
+    const result = el('foo', [
       'bar',
       'baz',
       'qux'
@@ -119,9 +117,8 @@ describe("Element creation", () => {
     assert(result.outerHTML === '<div class="foo">barbazqux</div>')
   })
 
-
   it('can fill an element with nested arrays', () => {
-    const result = el("foo", [
+    const result = el('foo', [
       'bar', [
         'baz', [
           'qux'
@@ -132,23 +129,23 @@ describe("Element creation", () => {
   })
 
   it('can fill an element with multiple arguments', () => {
-    const result = el("foo",
-      "bar",
-      "baz",
-      "qux"
+    const result = el('foo',
+      'bar',
+      'baz',
+      'qux'
     )
     assert(result.outerHTML === '<div class="foo">barbazqux</div>')
   })
 
   it('can do all of the above', () => {
-    const base = document.createElement("div")
-    const result = el("foo", [
-      el("h1"), [
+    const base = document.createElement('div')
+    const result = el('foo', [
+      el('h1'), [
         el(base),
-        "bar"
+        'bar'
       ],
-      $ => { $.setAttribute("name", 'baz') },
-      function() { this.id = 'qux' },
+      $ => { $.setAttribute('name', 'baz') },
+      function () { this.id = 'qux' },
       $ => 'corge'
     ])
     assert(result.outerHTML === '<div class="foo" name="baz" id="qux"><h1 class="h1"></h1><div></div>barcorge</div>')
@@ -156,20 +153,19 @@ describe("Element creation", () => {
 
   it('can nest el elegantly', () => {
     const result = el('foo',
-      el('bar', 
+      el('bar',
         el('baz', $ => {
           el($, 'qux')
         })
       )
-    )  
+    )
     assert(result.outerHTML === '<div class="foo"><div class="bar"><div class="baz">qux</div></div></div>')
   })
-
 })
 
-describe("Reactivity", () => {
+describe('Reactivity', () => {
   it('can take an observer', (done) => {
-    const result = el("foo", ob(() => {}))
+    const result = el('foo', ob(() => {}))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
@@ -180,11 +176,11 @@ describe("Reactivity", () => {
   })
 
   it('can take an observer modifying a property', (done) => {
-    const result = el("foo", ob(($) =>  {
+    const result = el('foo', ob(($) => {
       $.setAttribute('name', 'bar')
     }))
     assert.equal(
-      result.outerHTML, 
+      result.outerHTML,
       '<div class="foo" name="bar"><!--observerStart--><!--observerEnd--></div>'
     )
     document.body.appendChild(result)
@@ -196,7 +192,7 @@ describe("Reactivity", () => {
   })
 
   it('can take an observer returning a string', (done) => {
-    const result = el("foo", ob(() => 'bar'))
+    const result = el('foo', ob(() => 'bar'))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->bar<!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
@@ -207,7 +203,7 @@ describe("Reactivity", () => {
   })
 
   it('can take an observer returning an element', (done) => {
-    const result = el("foo", ob(() => el('bar', 'baz')))
+    const result = el('foo', ob(() => el('bar', 'baz')))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><div class="bar">baz</div><!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
@@ -218,7 +214,7 @@ describe("Reactivity", () => {
   })
 
   it('can take an observer returning an array', (done) => {
-    const result = el("foo", ob(() => ['bar', 'baz', 'qux']))
+    const result = el('foo', ob(() => ['bar', 'baz', 'qux']))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->barbazqux<!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
@@ -229,7 +225,7 @@ describe("Reactivity", () => {
   })
 
   it('can take nested observers', (done) => {
-    const result = el("foo", ob(() => {
+    const result = el('foo', ob(() => {
       return ob(() => {
         return 'bar'
       })
@@ -244,7 +240,7 @@ describe("Reactivity", () => {
   })
 
   it('can take a complex nested set of observers', (done) => {
-    const result = el("foo", ob(() => {
+    const result = el('foo', ob(() => {
       return [
         ob(() => {
           return [
@@ -260,7 +256,7 @@ describe("Reactivity", () => {
           return ob(() => {
             return 'qux'
           })
-        }),
+        })
       ]
     }))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart--><!--observerStart--><!--observerStart-->bar<!--observerEnd--><!--observerStart-->baz<!--observerEnd--><!--observerEnd--><!--observerStart--><!--observerStart-->qux<!--observerEnd--><!--observerEnd--><!--observerEnd--></div>')
@@ -275,27 +271,27 @@ describe("Reactivity", () => {
   it('updates an observer property', (done) => {
     const rx = new Reactor()
     rx.bar = 'baz'
-    const result = el("foo", ob(($) =>  {
+    const result = el('foo', ob(($) => {
       $.setAttribute('name', rx.bar)
     }))
     assert.equal(
-      result.outerHTML, 
+      result.outerHTML,
       '<div class="foo" name="baz"><!--observerStart--><!--observerEnd--></div>'
     )
     rx.bar = 'qux'
     assert.equal(
-      result.outerHTML, 
+      result.outerHTML,
       '<div class="foo" name="baz"><!--observerStart--><!--observerEnd--></div>'
     )
     document.body.appendChild(result)
     setTimeout(() => {
       assert.equal(
-        result.outerHTML, 
+        result.outerHTML,
         '<div class="foo" name="qux"><!--observerStart--><!--observerEnd--></div>'
       )
       rx.bar = 'corge'
       assert.equal(
-        result.outerHTML, 
+        result.outerHTML,
         '<div class="foo" name="corge"><!--observerStart--><!--observerEnd--></div>'
       )
       result.remove()
@@ -303,10 +299,10 @@ describe("Reactivity", () => {
     }, 10)
   })
 
-  it('updates an observer string', (done) => { 
+  it('updates an observer string', (done) => {
     const rx = new Reactor()
-    rx.bar = 'baz'  
-    const result = el("foo", ob(() => rx.bar))
+    rx.bar = 'baz'
+    const result = el('foo', ob(() => rx.bar))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
     rx.bar = 'qux'
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
@@ -320,11 +316,11 @@ describe("Reactivity", () => {
     }, 10)
   })
 
-  it('updates an observer element', (done) => { 
+  it('updates an observer element', (done) => {
     const rx = new Reactor()
     rx.foo = 'foo'
     rx.bar = 'bar'
-    const result = el("div", ob(() => el(rx.foo, rx.bar)))
+    const result = el('div', ob(() => el(rx.foo, rx.bar)))
     assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="foo">bar</div><!--observerEnd--></div>')
     rx.foo = 'baz'
     rx.bar = 'qux'
@@ -338,7 +334,7 @@ describe("Reactivity", () => {
       assert.equal(result.outerHTML, '<div class="div"><!--observerStart--><div class="corge">grault</div><!--observerEnd--></div>')
       result.remove()
       done()
-    }, 10)  
+    }, 10)
   })
   it('test for a simple element triggering', (done) => {
     const rx = new Reactor()
@@ -365,16 +361,16 @@ describe("Reactivity", () => {
     }, 10)
   })
 
-  it('updates a complex element', (done) => { 
+  it('updates a complex element', (done) => {
     const rx = new Reactor()
     rx.title = 'foo'
     rx.paragraphs = [
-      { id: 'bar', content: 'Lorem ipsum dolor sit amet', time: '123'},
-      { id: 'baz', content: 'Ut enim ad minim veniam', time: '456'},
-      { id: 'qux', content: 'Duis aute irure dolor in reprehenderit', time: '789'}
+      { id: 'bar', content: 'Lorem ipsum dolor sit amet', time: '123' },
+      { id: 'baz', content: 'Ut enim ad minim veniam', time: '456' },
+      { id: 'qux', content: 'Duis aute irure dolor in reprehenderit', time: '789' }
     ]
-    const result = el("article",
-      el('h1', ob(() => rx.title )),
+    const result = el('article',
+      el('h1', ob(() => rx.title)),
       ob(() => rx.paragraphs.map((paragraph) => [
         el('p', ob(($) => {
           $.setAttribute('id', paragraph.id)
@@ -414,37 +410,36 @@ describe("Reactivity", () => {
       )
       result.remove()
       done()
-    }, 10)  
+    }, 10)
   })
-
 })
 
 describe('Shorthands', () => {
   it('set attributes using attr', () => {
     const result = el('foo', attr('id', 'bar'))
-    assert.equal(result.outerHTML,'<div class="foo" id="bar"></div>')
+    assert.equal(result.outerHTML, '<div class="foo" id="bar"></div>')
   })
 
   it('set multiple attributes using attr', () => {
-    const result = el('foo', 
-      attr('id', 'bar'), 
+    const result = el('foo',
+      attr('id', 'bar'),
       attr('name', 'baz')
     )
-    assert.equal(result.outerHTML,'<div class="foo" id="bar" name="baz"></div>')
+    assert.equal(result.outerHTML, '<div class="foo" id="bar" name="baz"></div>')
   })
 
   it('set attributes reactively using attr', (done) => {
     const rx = new Reactor()
     rx.foo = 'bar'
     const result = el('foo', ob(() => attr('id', rx.foo)))
-    assert.equal(result.outerHTML,'<div class="foo" id="bar"><!--observerStart--><!--observerEnd--></div>')
+    assert.equal(result.outerHTML, '<div class="foo" id="bar"><!--observerStart--><!--observerEnd--></div>')
     rx.foo = 'baz'
-    assert.equal(result.outerHTML,'<div class="foo" id="bar"><!--observerStart--><!--observerEnd--></div>')
+    assert.equal(result.outerHTML, '<div class="foo" id="bar"><!--observerStart--><!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
-      assert.equal(result.outerHTML,'<div class="foo" id="baz"><!--observerStart--><!--observerEnd--></div>')
+      assert.equal(result.outerHTML, '<div class="foo" id="baz"><!--observerStart--><!--observerEnd--></div>')
       rx.foo = 'corge'
-      assert.equal(result.outerHTML,'<div class="foo" id="corge"><!--observerStart--><!--observerEnd--></div>')
+      assert.equal(result.outerHTML, '<div class="foo" id="corge"><!--observerStart--><!--observerEnd--></div>')
       result.remove()
       done()
     }, 10)
@@ -455,26 +450,23 @@ describe('Shorthands', () => {
     const rx = new Reactor()
     rx.foo = 'bar'
     const display = el('h1', ob(() => rx.foo))
-    const input = el("input", 
+    const input = el('input',
       attr('type', 'text'),
       bind(rx, 'foo')
     )
-    const input2 = el("input", 
+    const input2 = el('input',
       attr('type', 'text'),
       bind(rx, 'foo')
     )
     el(document.body, display, input, input2)
   })
-
-
 })
 
-describe("Clean up", () => {
-
+describe('Clean up', () => {
   it('disables observer when removed from DOM', (done) => {
     const rx = new Reactor()
-    rx.bar = 'baz'  
-    const result = el("foo", ob(() => rx.bar))
+    rx.bar = 'baz'
+    const result = el('foo', ob(() => rx.bar))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
     rx.bar = 'qux'
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
@@ -492,11 +484,10 @@ describe("Clean up", () => {
     }, 10)
   })
 
-
   it('removes comment pair together', (done) => {
     const rx = new Reactor()
-    rx.bar = 'baz'  
-    const result = el("foo", ob(() => rx.bar))
+    rx.bar = 'baz'
+    const result = el('foo', ob(() => rx.bar))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
     result.childNodes[0].remove()
     setTimeout(() => {
@@ -505,12 +496,10 @@ describe("Clean up", () => {
     }, 10)
   })
 
-
-
   it('disables observer when comment placeholder is removed', (done) => {
     const rx = new Reactor()
-    rx.bar = 'baz'  
-    const result = el("foo", ob(() => rx.bar))
+    rx.bar = 'baz'
+    const result = el('foo', ob(() => rx.bar))
     assert.equal(result.outerHTML, '<div class="foo"><!--observerStart-->baz<!--observerEnd--></div>')
     document.body.appendChild(result)
     setTimeout(() => {
@@ -525,8 +514,5 @@ describe("Clean up", () => {
         done()
       }, 10)
     }, 10)
-
   })
-
-  
 })
