@@ -247,7 +247,10 @@ export const el = (descriptor, ...children) => {
         }
       }).start()
       // Kickoff the observer with a context of self
-      child(self)
+      child.setThisContext(self)
+      child.setArgsContext(self)
+      child.stop()
+      child.start()
       // If it is not yet in the document then stop observer from triggering further
       if (!document.contains(self)) child.stop()
 
