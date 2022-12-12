@@ -1,5 +1,10 @@
 /* esline-env browser */
-import { isObserver, observe, shuck } from 'reactorjs'
+import { 
+  Observer,
+  shuck
+} from 'reactorjs'
+
+
 
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
@@ -202,7 +207,7 @@ export const el = (descriptor, ...children) => {
     // On initial commitment. Observers work like normal functions
     // On subsequent triggers. Observers first clear everything
     // between bookends
-    } else if (isObserver(child)) {
+    } else if (child instanceof Observer) {
       elInterface.observers.add(child)
       // Start with the bookends marking the observer domain
       const observerStartNode = document.createComment('observerStart')
@@ -230,7 +235,7 @@ export const el = (descriptor, ...children) => {
       // Check if the bookmarks are still attached before acting
       // Clear everything in between the bookmarks (including observers)
       // Then insert new content between them
-      observe(() => {
+      new Observer(() => {
         const result = child.value
         if (typeof result !== 'undefined' && observerEndNode.parentNode === self) {
           const oldChildren = getNodesBetween(observerStartNode, observerEndNode)
@@ -242,9 +247,7 @@ export const el = (descriptor, ...children) => {
         }
       }).start()
       // Kickoff the observer with a context of self
-      child.setContext(self)
-      child.stop()
-      child.start()
+      child(self)
       // If it is not yet in the document then stop observer from triggering further
       if (!document.contains(self)) child.stop()
 
@@ -286,7 +289,7 @@ export function attr (attribute, value) {
 export function bind (reactor, key) {
   return ($) => {
     $.oninput = () => reactor[key] = $.value
-    return observe(() => $.value = reactor[key])
+    return new Observer(() => $.value = reactor[key])
   }
 }
 

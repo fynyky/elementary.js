@@ -18,15 +18,15 @@
       mocha.checkLeaks();
       assert = chai.assert
     </script>
-    <script type="module" src="./elementary.js"></script>
+    <script type="module" src="./test.js"></script>
     <script>
-      import("./elementary.js").then(module => {
+      import("./test.js").then(module => {
         el = module.el
         Reactor = module.Reactor
         observe = module.observe
-        unobserve = module.unobserve
+        hide = module.hide
         batch = module.batch
-        define = module.define
+        shuck = module.shuck
         import('./test.js').then(() => {
           mocha.run()
         })

@@ -1,8 +1,8 @@
 /* esline-env browser */
-/* globals  el */
 
-import { el, attr, bind } from './elementary.js'
-import { observe as ob, Reactor } from 'reactorjs'
+import { el, attr, bind } from '../src/index.js'
+import { Observer, Reactor } from 'reactorjs'
+const ob = (x) => new Observer(x)
 
 // it('testing Proxy on DOM objects', () => {
 //   const proxyHandler = {

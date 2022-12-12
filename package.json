@@ -2,15 +2,27 @@
   "name": "elementary.js",
   "version": "0.0.1",
   "description": "Simple reactive ui building without frameworks",
+  "type": "module",
   "source": "src/index.js",
   "main": "dist/main.js",
-  "type": "module",
+  "browser": "dist/browser.js",
+  "targets": {
+    "browser": {
+      "context": "browser",
+      "includeNodeModules": true,
+      "optimize": true
+    }
+  },
   "devDependencies": {
     "parcel": "^2.8.1",
     "standard": "^17.0.0"
   },
   "scripts": {
-    "lint": "standard --fix"
+    "lint": "standard --fix",
+    "build": "parcel build",
+    "pretest": "npm run build",
+    "test": "parcel serve test/test.html",
+    "prepack": "npm run build"
   },
   "repository": {
     "type": "git",
