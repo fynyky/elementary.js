@@ -1,34 +1,9 @@
-/* esline-env browser */
+/* eslint-env mocha */
+/* global assert */
 
 import { el, attr, bind } from '../src/index.js'
 import { Observer, Reactor } from 'reactorjs'
 const ob = (x) => new Observer(x)
-
-// it('testing Proxy on DOM objects', () => {
-//   const proxyHandler = {
-//     get(obj, prop) {
-//       return obj[prop]
-//     },
-//     set(obj, prop, value) {
-//       return obj[prop] = value
-//     }
-//   }
-//   const parent = document.createElement('div')
-//   const div = document.createElement('div')
-//   const p = document.createElement('p')
-//   const divProxy = new Proxy(div, proxyHandler)
-//   const pProxy = new Proxy(p, proxyHandler)
-//   div.innerHTML = 'foo'
-// })
-
-// it('testing Signal Proxy on DOM objects', () => {
-//   const signal = new Signal()
-//   const parent = document.createElement('div')
-//   const div = document.createElement('div')
-//   signal(div)
-//   signal().innerHTML
-//   parent.appendChild(div)
-// })
 
 describe('Element creation', () => {
   it('can create a basic div', () => {

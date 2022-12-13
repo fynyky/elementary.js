@@ -1,10 +1,5 @@
-/* esline-env browser */
-import { 
-  Observer,
-  shuck
-} from 'reactorjs'
-
-
+/* eslint-env browser */
+import { Observer, shuck } from 'reactorjs'
 
 // Manually updated list of valid HTML tags
 // Used to know when to create a named tag and when to create a div by default
@@ -223,7 +218,7 @@ export const el = (descriptor, ...children) => {
         clear: function () {
           this.start.remove()
           this.end.remove()
-          this.observer.stop
+          this.observer.stop()
           elInterface.observers.delete(this.observer)
         }
       }
@@ -291,8 +286,8 @@ export function attr (attribute, value) {
 // el('input', attribute('type', 'text'), bind(rx, 'foo'))
 export function bind (reactor, key) {
   return ($) => {
-    $.oninput = () => reactor[key] = $.value
-    return new Observer(() => $.value = reactor[key])
+    $.oninput = () => { reactor[key] = $.value }
+    return new Observer(() => { $.value = reactor[key] })
   }
 }
 
